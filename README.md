@@ -1,36 +1,289 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Hack The Web
+
+A web platform for running a college open-source hackathon.
+
+Students log in with GitHub, form teams, claim issues, and solve them on GitHub.
+When their pull request is merged and an admin approves it, their team gets points
+and the leaderboard updates.
+
+---
+
+## The Idea
+
+GitHub is already good at code, issues, pull requests, reviews and merges.
+So we don't rebuild any of that. We only build the competition around it.
+
+**GitHub handles:** code, issues, pull requests, reviews, merges, developer identity.
+
+**We handle:** the event, teams, which issues count, who claimed what, which PR
+belongs to which team, verification, points, point history, and the leaderboard.
+
+---
+
+## How It Works
+
+### For students
+
+```
+Login with GitHub
+      ↓
+Create or join a team
+      ↓
+Browse issues and claim one
+      ↓
+Solve it on GitHub and open a PR
+      ↓
+Platform picks up the PR automatically
+      ↓
+PR gets merged
+      ↓
+Admin approves it
+      ↓
+Team gets points → leaderboard updates
+```
+
+### For admins
+
+```
+Create the event
+      ↓
+Add repositories
+      ↓
+Register issues and set points for each
+      ↓
+Watch teams and incoming PRs
+      ↓
+Approve or reject contributions
+      ↓
+Adjust scores if needed → view the ledger
+```
+
+---
+
+## The Most Important Part
+
+Everything else is just screens around this one flow:
+
+```
+GitHub PR
+   ↓
+Webhook hits our API
+   ↓
+Verify the signature
+   ↓
+Skip it if we've seen this delivery before
+   ↓
+Find the GitHub user → find their team
+   ↓
+Find the issue the PR says it fixes
+   ↓
+Save a contribution
+   ↓
+Is the PR merged?
+   ├── No  → wait for the next webhook
+   └── Yes → mark it pending review
+                ↓
+          Admin reviews it
+          ├── Reject  → 0 points
+          └── Approve → point transaction → team score → leaderboard
+```
+
+A contribution moves through these states:
+
+`OPEN → MERGED → PENDING_REVIEW → APPROVED` (or `REJECTED`)
+
+Two extra states exist for problem cases:
+
+- `UNMATCHED` — the PR author is not a registered participant
+- `NEEDS_ISSUE_MAPPING` — we could not tell which issue the PR is for, so an admin maps it by hand
+
+---
+
+## Tech Stack
+
+| Layer | What we use |
+|---|---|
+| Framework | Next.js (App Router) |
+| Language | TypeScript |
+| UI | React + Tailwind CSS |
+| Components | Hand-written, no component library |
+| Database | Supabase (PostgreSQL) |
+| Auth | Supabase Auth + GitHub OAuth |
+| GitHub link | GitHub App + webhooks |
+| Validation | Zod |
+| Forms | React Hook Form |
+| Hosting | Vercel |
+
+We are **not** using shadcn/ui. Components are written by hand with Tailwind.
+
+We are **not** using a `src/` folder. Everything lives at the repo root.
+
+---
+
+## Folder Structure
+
+```
+app/
+├── (auth)/            login and auth callback
+├── dashboard/         student dashboard
+├── admin/             admin dashboard
+├── leaderboard/       public leaderboard
+├── issues/            issue browser and issue detail
+├── api/               route handlers (incl. the GitHub webhook)
+├── components/        shared React components
+│   ├── ui/            small building blocks (button, card, input…)
+│   ├── teams/
+│   ├── issues/
+│   ├── contributions/
+│   ├── leaderboard/
+│   └── admin/
+├── lib/
+│   ├── supabase/      browser and server Supabase clients
+│   ├── github/        webhook verification, PR parsing
+│   ├── validation/    Zod schemas
+│   └── scoring/       point awarding logic
+└── types/             shared TypeScript types
+```
+
+Import with the `@/` alias, for example `import { createClient } from '@/app/lib/supabase/server'`.
+
+---
+
+## Database Tables
+
+```
+events              the hackathon itself
+profiles            one per user, tied to their GitHub identity
+teams               team name, join code, score
+team_members        who is in which team
+repositories        repos that count for the event
+hackathon_issues    issues registered by admins, each with a point value
+issue_claims        which team claimed which issue
+contributions       one row per pull request we are tracking
+point_transactions  every point change, ever (the ledger)
+webhook_events      raw GitHub webhooks, for idempotency and debugging
+```
+
+How they relate:
+
+```
+Event
+ ├── Teams ── Team Members ── GitHub identity
+ ├── Repositories ── Issues ── Claims
+ └── Contributions ── Point Transactions
+```
+
+Team scores are never edited on their own. Every change to a score also writes a
+row in `point_transactions`, so the whole competition is auditable.
+
+---
 
 ## Getting Started
 
-First, run the development server:
+**1. Install**
+
+```bash
+npm install
+```
+
+**2. Set up environment variables**
+
+Create a `.env.local` file:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=your-project-url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+
+GITHUB_APP_ID=
+GITHUB_PRIVATE_KEY=
+GITHUB_WEBHOOK_SECRET=
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
+```
+
+The service role key is **server only**. Never put it in a `NEXT_PUBLIC_` variable
+and never import it into a client component.
+
+**3. Run it**
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+**4. Test webhooks locally**
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+GitHub cannot reach `localhost`, so tunnel it:
 
-## Learn More
+```bash
+ngrok http 3000
+```
 
-To learn more about Next.js, take a look at the following resources:
+Point your GitHub App's webhook URL at `https://<your-tunnel>/api/github/webhook`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Scripts
 
-## Deploy on Vercel
+```bash
+npm run dev      # start the dev server
+npm run build    # production build
+npm run start    # run the production build
+npm run lint     # eslint
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Build Plan (7 days)
+
+| Day | What gets built |
+|---|---|
+| 1 | Project setup, database schema, GitHub login, app shell |
+| 2 | Create team, join code, join team, team dashboard |
+| 3 | Admin event/repos/issues, issue browser, claiming |
+| 4 | GitHub App, webhook endpoint, contribution tracking |
+| 5 | Review page, scoring engine, point ledger |
+| 6 | Leaderboard, student dashboard, admin tables, responsive UI |
+| 7 | Row Level Security, testing, seed data, deploy |
+
+Day 4 is the risky one. Do not move past it until webhooks are reliable.
+
+---
+
+## Rules For Awarding Points
+
+Points are only given when **all** of this is true:
+
+- the PR author is a registered participant on a team
+- the PR is linked to an issue an admin registered
+- the PR is actually merged
+- an admin has approved the contribution
+- points have not already been given for that contribution
+
+Everything else scores zero.
+
+---
+
+## What We Are Not Building
+
+Skip all of this for the MVP:
+
+chat, a built-in code editor, custom git hosting, advanced analytics, a
+notification system, AI issue suggestions, anti-cheat, heavy gamification, a
+mobile app, background workers, or a complex realtime setup.
+
+The competition engine is the priority.
+
+---
+
+## Definition Of Done
+
+The MVP is finished when this works end to end, with nobody touching the database:
+
+```
+A student joins a team → claims an issue → solves it on GitHub →
+opens a PR → the platform detects it → the PR is merged →
+an admin approves it → points are awarded → the leaderboard updates
+```
