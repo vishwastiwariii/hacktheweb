@@ -6,10 +6,10 @@ export const importRepositorySchema = z.object({
     repositoryUrl: z
         .string()
         .trim()
-        .url("Enter a valid GitHub repository URL")
+        .url("That doesn't look like a github.com/owner/repo URL.")
         .refine(
             (value) => /^https?:\/\/(www\.)?github\.com\/[^/]+\/[^/]+\/?$/.test(value),
-            "Expected a URL like https://github.com/owner/repo",
+            "That doesn't look like a github.com/owner/repo URL.",
         ),
 })
 

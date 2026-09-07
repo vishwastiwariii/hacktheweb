@@ -26,20 +26,25 @@ export default async function JoinTeamPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-sm px-4 py-12">
-      <Link
-        href="/dashboard"
-        className="text-sm text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-      >
-        ← Back to dashboard
-      </Link>
+    <div className="flex flex-1 flex-col bg-[#0e0f12] text-zinc-100">
+      <div className="mx-auto w-full max-w-2xl px-6 py-12">
+        <Link
+          href="/dashboard"
+          className="text-sm font-medium text-accent transition-opacity hover:opacity-80"
+        >
+          ← Back to dashboard
+        </Link>
 
-      <h1 className="mt-4 text-2xl font-semibold">Join a team</h1>
-      <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-        Enter the six-character code a teammate gave you.
-      </p>
+        <h1 className="mt-4 text-4xl font-extrabold tracking-tight text-white sm:text-5xl">
+          Join a team
+        </h1>
+        <p className="mt-4 max-w-xl text-lg leading-relaxed text-zinc-300">
+          Got a code from a friend? Paste it below. Codes are six characters and
+          not case-sensitive.
+        </p>
 
-      <JoinTeamForm />
+        <JoinTeamForm />
+      </div>
     </div>
   );
 }

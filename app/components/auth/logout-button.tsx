@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/app/lib/supabase/client";
 
@@ -15,8 +15,10 @@ export default function LogoutButton({
   children?: ReactNode;
 }) {
   const router = useRouter();
+  const [pending, setPending] = useState(false);
 
   async function handleLogout() {
+    setPending(true);
     const supabase = createClient();
     await supabase.auth.signOut();
 
@@ -30,9 +32,43 @@ export default function LogoutButton({
     <button
       type="button"
       onClick={handleLogout}
-      className={className ?? DEFAULT_CLASS}
+      disabled={pending}
+      className={`${className ?? DEFAULT_CLASS} disabled:cursor-not-allowed disabled:opacity-70`}
     >
-      {children ?? "Log out"}
+      {pending ? (
+        <>
+          <Spinner />
+          Signing out&hellip;
+        </>
+      ) : (
+        (children ?? "Log out")
+      )}
     </button>
+  );
+}
+
+function Spinner() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className="h-4 w-4 animate-spin"
+      fill="none"
+    >
+      <circle
+        cx="12"
+        cy="12"
+        r="9"
+        stroke="currentColor"
+        strokeWidth="3"
+        className="opacity-25"
+      />
+      <path
+        d="M21 12a9 9 0 0 0-9-9"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }

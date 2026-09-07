@@ -69,6 +69,9 @@ export async function getIssuesPage(
         claimableOnly?: boolean;
         page?: number;
         pageSize?: number;
+        // "points" = highest value first (public browse); "issue_number" =
+        // ascending, the default used by the admin list.
+        orderBy?: "points" | "issue_number";
     }
 ): Promise<IssuePage> {
     const page = Math.max(1, Math.floor(opts.page ?? 1));
@@ -82,9 +85,17 @@ export async function getIssuesPage(
             `${ISSUE_COLUMNS}, repositories!inner ( id, event_id, owner, name ), issue_claims ( id )`,
             { count: "exact" }
         )
-        .eq("repositories.event_id", opts.eventId)
-        .order("github_issue_number", { ascending: true })
-        .range(from, to);
+        .eq("repositories.event_id", opts.eventId);
+
+    if ((opts.orderBy ?? "issue_number") === "points") {
+        query = query
+            .order("points", { ascending: false })
+            .order("github_issue_number", { ascending: true });
+    } else {
+        query = query.order("github_issue_number", { ascending: true });
+    }
+
+    query = query.range(from, to);
 
     if (opts.repositoryId) {
         query = query.eq("repository_id", opts.repositoryId);
@@ -107,6 +118,49 @@ export async function getIssuesPage(
         pageSize,
         totalPages: Math.max(1, Math.ceil(total / pageSize)),
     };
+}
+
+// Header stat for the browse pages: how many claimable issues exist and how
+// many of those are already claimed. Best-effort — collapses to zeroes on error.
+export async function getClaimableIssueCounts(
+    supabase: SupabaseClient,
+    eventId: string,
+    repositoryId?: string
+): Promise<{ open: number; claimed: number }> {
+    try {
+        let openQuery = supabase
+            .from("hackathon_issues")
+            .select("id, repositories!inner ( event_id )", {
+                count: "exact",
+                head: true,
+            })
+            .eq("repositories.event_id", eventId)
+            .eq("available", true)
+            .eq("metadata_valid", true);
+
+        let claimedQuery = supabase
+            .from("hackathon_issues")
+            .select("id, repositories!inner ( event_id ), issue_claims!inner ( id )", {
+                count: "exact",
+                head: true,
+            })
+            .eq("repositories.event_id", eventId)
+            .eq("available", true)
+            .eq("metadata_valid", true);
+
+        if (repositoryId) {
+            openQuery = openQuery.eq("repository_id", repositoryId);
+            claimedQuery = claimedQuery.eq("repository_id", repositoryId);
+        }
+
+        const [openRes, claimedRes] = await Promise.all([openQuery, claimedQuery]);
+        return {
+            open: openRes.count ?? 0,
+            claimed: claimedRes.count ?? 0,
+        };
+    } catch {
+        return { open: 0, claimed: 0 };
+    }
 }
 
 export async function getIssue(

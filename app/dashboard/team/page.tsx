@@ -1,9 +1,8 @@
-import type { ReactNode } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/app/lib/supabase/server";
 import CopyJoinCode from "@/app/components/team/copy-join-code";
+import UserAvatar from "@/app/components/ui/user-avatar";
 import {
   MAX_TEAM_SIZE,
   getTeam,
@@ -101,14 +100,11 @@ export default async function TeamDashboardPage() {
                     key={member.user_id}
                     className="flex items-center gap-4 py-4"
                   >
-                    {isYou ? (
-                      <MemberAvatar
-                        src={yourAvatar}
-                        initial={yourName.charAt(0).toUpperCase()}
-                      />
-                    ) : (
-                      <PlaceholderAvatar />
-                    )}
+                    <UserAvatar
+                      src={isYou ? yourAvatar : undefined}
+                      name={isYou ? yourName : undefined}
+                      size={44}
+                    />
 
                     <div className="min-w-0 flex-1">
                       <p className="font-bold text-white">
@@ -197,45 +193,6 @@ function RoleBadge({ leader }: { leader: boolean }) {
       }`}
     >
       {leader ? "Leader" : "Member"}
-    </span>
-  );
-}
-
-function MemberAvatar({ src, initial }: { src?: string; initial: string }) {
-  if (src) {
-    return (
-      <Image
-        src={src}
-        alt=""
-        width={44}
-        height={44}
-        className="h-11 w-11 shrink-0 rounded-sm object-cover"
-      />
-    );
-  }
-  return (
-    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-sm bg-accent/10 text-lg font-extrabold text-accent">
-      {initial}
-    </span>
-  );
-}
-
-function PlaceholderAvatar(): ReactNode {
-  return (
-    <span className="flex h-11 w-11 shrink-0 items-center justify-center border border-dashed border-zinc-700 text-zinc-600">
-      <svg
-        viewBox="0 0 24 24"
-        aria-hidden="true"
-        className="h-5 w-5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-        <circle cx="12" cy="7" r="4" />
-      </svg>
     </span>
   );
 }

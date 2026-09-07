@@ -91,35 +91,57 @@ export async function createTeam (
 
     const joinCode = generateCode()
 
-    const { data: team, error: teamError } = await supabase.from("teams").insert({
+    // Insert without a RETURNING read: the members-only SELECT policy on `teams`
+    // would hide the fresh row (the leader membership doesn't exist yet).
+    const { error: teamError } = await supabase.from("teams").insert({
         event_id: eventId,
         name: teamName,
         join_code: joinCode
     })
-    .select()
-    .single()
 
-    if (!team || teamError) {
-        throw new Error(teamError?.message || "Failed to create a team")
+    if (teamError) {
+        // 23505 = unique_violation (name or join_code already used for this event)
+        if ((teamError as { code?: string }).code === "23505") {
+            throw new Error("A team with this name already exists")
+        }
+        throw new Error(teamError.message || "Failed to create a team")
     }
 
+    // Read the row back through the join-code helper (SECURITY DEFINER), since a
+    // plain select is still gated by the members-only policy at this point.
+    const { data: createdRows, error: lookupError } = await supabase.rpc(
+        "team_by_join_code",
+        { p_event_id: eventId, p_join_code: joinCode }
+    )
+    const team = (Array.isArray(createdRows) ? createdRows[0] : createdRows) as
+        | TeamSummary
+        | undefined
+
+    if (lookupError || !team) {
+        throw new Error("Team was created but could not be loaded")
+    }
+
+    // team_members has no event_id column — the event is reached through the team.
     const { error: memberError } = await supabase.from("team_members").insert({
         team_id: team.id,
         user_id: userId,
-        event_id: event.id,
         role: "leader"
     })
 
     if (memberError) {
-    // Rollback manually if membership creation fails
+    // Best-effort rollback if membership creation fails.
         await supabase
         .from("teams")
         .delete()
         .eq("id", team.id);
+        // 23505 = the one-membership-per-user constraint.
+        if ((memberError as { code?: string }).code === "23505") {
+            throw new Error("You are already part of a team");
+        }
         throw new Error(memberError.message);
     }
 
-    return team; 
+    return team;
 }
 
 
@@ -149,43 +171,51 @@ export async function joinTeam (
         throw new Error("Team registration is closed")
     }
 
-    // Join codes are stored uppercase; joinTeamSchema already uppercases the input.
-    const { data: team, error: teamError } = await supabase.from("teams")
-        .select("id, name, join_code, event_id, created_at")
-        .eq("event_id", eventId)
-        .eq("join_code", joinCode)
-        .maybeSingle()
+    // Join codes are stored uppercase; joinTeamSchema already uppercases the
+    // input. team_by_join_code is SECURITY DEFINER so a non-member can resolve
+    // the team without a table-wide read of `teams`.
+    const { data: matchRows, error: teamError } = await supabase.rpc(
+        "team_by_join_code",
+        { p_event_id: eventId, p_join_code: joinCode }
+    )
 
     if (teamError) {
         throw new Error(teamError.message)
     }
 
+    const team = (Array.isArray(matchRows) ? matchRows[0] : matchRows) as
+        | TeamSummary
+        | undefined
+
     if (!team) {
         throw new Error("Invalid join code")
     }
 
-    const { count, error: countError } = await supabase.from("team_members")
-        .select("user_id", { count: "exact", head: true })
-        .eq("team_id", team.id)
+    const { data: seatCount, error: countError } = await supabase.rpc(
+        "team_seat_count",
+        { p_team_id: team.id }
+    )
 
     if (countError) {
         throw new Error(countError.message)
     }
 
-    if ((count ?? 0) >= MAX_TEAM_SIZE) {
+    if ((seatCount ?? 0) >= MAX_TEAM_SIZE) {
         throw new Error("This team is already full")
     }
 
     const { error: memberError } = await supabase.from("team_members").insert({
         team_id: team.id,
         user_id: userId,
-        event_id: eventId,
         role: "member"
     })
 
     if (memberError) {
-    // Unique (user_id, event_id) means they raced into another team between the
-    // check above and this insert.
+    // 23505 = the one-membership-per-user constraint: they already joined a team
+    // (possibly racing between the check above and this insert).
+        if ((memberError as { code?: string }).code === "23505") {
+            throw new Error("You are already part of a team")
+        }
         throw new Error(memberError.message)
     }
 
@@ -250,22 +280,20 @@ export async function getTeamPointHistory (
 
 
 // Competition rank within the event: 1 + the number of teams with a strictly
-// higher score (ties share a rank). Rank is not a stored column. Best-effort —
-// if RLS hides other teams or the query fails, returns null and the UI shows "—".
+// higher score (ties share a rank). Computed by the team_rank() SECURITY DEFINER
+// function so it works even though a participant can only read their own team.
+// Best-effort — returns null (UI shows "—") if the call fails.
 export async function getTeamRank (
     supabase: SupabaseClient,
-    eventId: string,
-    teamScore: number
+    teamId: string
 ): Promise<number | null> {
     try {
-        const { count, error } = await supabase
-            .from("teams")
-            .select("id", { count: "exact", head: true })
-            .eq("event_id", eventId)
-            .gt("score", teamScore)
+        const { data, error } = await supabase.rpc("team_rank", {
+            p_team_id: teamId,
+        })
 
-        if (error) return null
-        return (count ?? 0) + 1
+        if (error || data == null) return null
+        return typeof data === "number" ? data : Number(data)
     } catch {
         return null
     }

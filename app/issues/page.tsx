@@ -1,10 +1,15 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/app/lib/supabase/server";
-import { getIssuesPage } from "@/app/lib/services/issue.service";
+import {
+  getClaimableIssueCounts,
+  getIssuesPage,
+} from "@/app/lib/services/issue.service";
+import AppHeader from "@/app/components/layout/app-header";
 import Pagination from "@/app/components/ui/pagination";
-import ClaimIssueButton from "@/app/components/issues/claim-issue-button";
-import { DifficultyBadge, LabelChips } from "@/app/components/issues/issue-meta";
+import IssueRow from "@/app/components/issues/issue-row";
+
+const PAGE_SIZE = 20;
 
 export default async function IssuesPage({
   searchParams,
@@ -23,79 +28,78 @@ export default async function IssuesPage({
   if (!eventId) throw new Error("ACTIVE_EVENT_ID is not configured");
 
   const page = Math.max(1, Number(pageParam ?? "1") || 1);
-  // Only available + valid-metadata issues are claimable.
-  const result = await getIssuesPage(supabase, {
-    eventId,
-    claimableOnly: true,
-    page,
-    pageSize: 20,
-  });
+  const [result, counts] = await Promise.all([
+    getIssuesPage(supabase, {
+      eventId,
+      claimableOnly: true,
+      page,
+      pageSize: PAGE_SIZE,
+      orderBy: "points",
+    }),
+    getClaimableIssueCounts(supabase, eventId),
+  ]);
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-12">
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="text-2xl font-semibold">Issues</h1>
-        <Link
-          href="/repositories"
-          className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg border border-zinc-300 px-4 text-sm font-medium transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-900"
-        >
-          Browse by repository
-        </Link>
-      </div>
-      <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-        Issues open for the hackathon. Points and difficulty come from GitHub
-        labels.
-      </p>
+    <div className="flex flex-1 flex-col bg-[#0e0f12] text-zinc-100">
+      <AppHeader />
 
-      <div className="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-800">
+      <div className="mx-auto w-full max-w-6xl px-6 py-12">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <h1 className="text-4xl font-extrabold tracking-tight text-white sm:text-5xl">
+            Claimable issues
+          </h1>
+          <Link
+            href="/repositories"
+            className="text-sm font-bold text-accent transition-opacity hover:opacity-80"
+          >
+            Browse by repository →
+          </Link>
+        </div>
+        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-zinc-400">
+          Everything the maintainers have opened up for the hackathon. Pick
+          something in your range, read the thread, then claim it so nobody
+          doubles up.
+        </p>
+
+        <div className="mt-8 flex items-center justify-between gap-4 border-b border-zinc-800 pb-3 text-[11px] font-bold uppercase tracking-widest text-zinc-500">
+          <span>
+            {counts.open} open · {counts.claimed} claimed
+          </span>
+          <span className="hidden sm:block">Sorted by points, high to low</span>
+        </div>
+
         {result.issues.length === 0 ? (
-          <p className="px-6 py-6 text-sm text-zinc-600 dark:text-zinc-400">
-            Nothing available to claim yet. Check back soon.
-          </p>
+          <div className="mt-6 border border-dashed border-zinc-700 p-8">
+            <p className="text-xl font-extrabold text-white">
+              Nothing available to claim yet. Check back soon.
+            </p>
+            <p className="mt-2 text-sm text-zinc-500">
+              Maintainers are still labelling issues. Meanwhile, browse the
+              repositories to see what&apos;s coming.
+            </p>
+            <Link
+              href="/repositories"
+              className="mt-4 inline-flex border border-zinc-700 px-4 py-2.5 text-sm font-bold text-zinc-100 transition-colors hover:bg-zinc-900"
+            >
+              Browse repositories
+            </Link>
+          </div>
         ) : (
-          <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
+          <ul className="divide-y divide-zinc-800">
             {result.issues.map((issue) => (
-              <li key={issue.id} className="flex items-start justify-between gap-4 px-6 py-4">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="truncate text-sm font-medium">{issue.title}</span>
-                    <DifficultyBadge difficulty={issue.difficulty} />
-                    <span className="text-sm font-medium">{issue.points} pts</span>
-                  </div>
-                  <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                    {issue.repo_full_name} · #{issue.github_issue_number}
-                  </p>
-                  <LabelChips labels={issue.labels} />
-                </div>
-                <div className="flex shrink-0 flex-col items-end gap-2">
-                  <a
-                    href={issue.html_url ?? "#"}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-xs text-zinc-600 hover:underline dark:text-zinc-400"
-                  >
-                    View on GitHub
-                  </a>
-                  {issue.claimed ? (
-                    <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-300">
-                      claimed
-                    </span>
-                  ) : (
-                    <ClaimIssueButton issueId={issue.id} />
-                  )}
-                </div>
-              </li>
+              <IssueRow key={issue.id} issue={issue} />
             ))}
           </ul>
         )}
-      </div>
 
-      <Pagination
-        page={result.page}
-        totalPages={result.totalPages}
-        total={result.total}
-        pathname="/issues"
-      />
+        <Pagination
+          page={result.page}
+          totalPages={result.totalPages}
+          total={result.total}
+          pathname="/issues"
+          pageSize={PAGE_SIZE}
+        />
+      </div>
     </div>
   );
 }
