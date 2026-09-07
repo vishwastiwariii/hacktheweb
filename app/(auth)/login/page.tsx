@@ -1,66 +1,99 @@
-"use client";
+import { createClient } from "@/app/lib/supabase/server";
+import { getRepositories } from "@/app/lib/services/repository.service";
+import { getIssuesPage } from "@/app/lib/services/issue.service";
+import SignInPanel from "./sign-in-panel";
 
-import { useState } from "react";
-import { createClient } from "@/app/lib/supabase/client";
+// Turns two ISO timestamps into a compact banner like "MAR 2–5" (same month) or
+// "MAR 30 – APR 2". Returns null if either date is missing/unreadable so the
+// stat row can simply drop the slot.
+function formatEventWindow(
+  startsAt: string | null | undefined,
+  endsAt: string | null | undefined,
+): string | null {
+  if (!startsAt || !endsAt) return null;
+  const start = new Date(startsAt);
+  const end = new Date(endsAt);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
 
-export default function LoginPage() {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const month = (d: Date) =>
+    d
+      .toLocaleString("en-US", { month: "short", timeZone: "UTC" })
+      .toUpperCase();
 
-  async function signInWithGitHub() {
-    setLoading(true);
-    setError(null);
+  if (month(start) === month(end)) {
+    return `${month(start)} ${start.getUTCDate()}–${end.getUTCDate()}`;
+  }
+  return `${month(start)} ${start.getUTCDate()} – ${month(end)} ${end.getUTCDate()}`;
+}
 
-    const supabase = createClient();
-    const result = await supabase.auth.signInWithOAuth({
-      provider: "github",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
+export default async function LoginPage() {
+  const supabase = await createClient();
+  const eventId = process.env.ACTIVE_EVENT_ID;
 
-    // On success the browser leaves for GitHub, so we only get here if it failed.
-    if (result.error) {
-      setError(result.error.message);
-      setLoading(false);
-    }
+  // Repos and issues are public reads; the events row may be gated by RLS for
+  // signed-out visitors, so the date slot degrades gracefully.
+  let repoCount = 0;
+  let issueCount = 0;
+  let eventWindow: string | null = null;
+
+  if (eventId) {
+    const [repos, issues, eventRes] = await Promise.all([
+      getRepositories(supabase, eventId).catch(() => []),
+      getIssuesPage(supabase, {
+        eventId,
+        claimableOnly: true,
+        page: 1,
+        pageSize: 1,
+      }).catch(() => null),
+      supabase
+        .from("events")
+        .select("starts_at, ends_at")
+        .eq("id", eventId)
+        .maybeSingle(),
+    ]);
+
+    repoCount = repos.length;
+    issueCount = issues?.total ?? 0;
+    eventWindow = formatEventWindow(
+      eventRes.data?.starts_at,
+      eventRes.data?.ends_at,
+    );
   }
 
   return (
-    <div className="flex flex-1 items-center justify-center px-4">
-      <div className="w-full max-w-sm text-center">
-        <h1 className="text-2xl font-semibold">Hack The Web</h1>
-        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          Sign in with GitHub to join a team and start claiming issues.
+    <div className="flex flex-1 flex-col lg:flex-row">
+      {/* Marketing panel */}
+      <div className="flex flex-col justify-between gap-16 bg-accent px-8 py-12 text-[#0a0a0a] lg:min-h-screen lg:w-1/2 lg:px-16 lg:py-16">
+        <p className="text-sm font-bold uppercase tracking-[0.2em]">
+          Hack The Web
         </p>
 
-        <button
-          type="button"
-          onClick={signInWithGitHub}
-          disabled={loading}
-          className="mt-8 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-zinc-900 px-4 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:opacity-60 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
-        >
-          <GitHubIcon />
-          {loading ? "Redirecting to GitHub..." : "Continue with GitHub"}
-        </button>
+        <div className="max-w-xl">
+          <h1 className="text-5xl font-extrabold leading-[0.95] tracking-tight sm:text-6xl lg:text-7xl">
+            Fix a real issue. Score for your team.
+          </h1>
+          <div className="mt-8 h-px w-40 bg-[#0a0a0a]" />
+          <p className="mt-6 max-w-md text-lg font-medium">
+            Four days, real repositories, real maintainers. Bring three friends
+            or find them here.
+          </p>
+        </div>
 
-        {error && (
-          <p className="mt-4 text-sm text-red-600 dark:text-red-400">{error}</p>
-        )}
+        <div className="flex flex-wrap gap-x-10 gap-y-2 text-sm font-bold uppercase tracking-widest">
+          <span>
+            {repoCount} repo{repoCount === 1 ? "" : "s"}
+          </span>
+          <span>
+            {issueCount} issue{issueCount === 1 ? "" : "s"}
+          </span>
+          {eventWindow && <span>{eventWindow}</span>}
+        </div>
+      </div>
+
+      {/* Sign-in panel */}
+      <div className="flex flex-1 items-start bg-[#0e0f12] px-8 py-16 lg:min-h-screen lg:px-16 lg:pt-[22vh]">
+        <SignInPanel />
       </div>
     </div>
-  );
-}
-
-function GitHubIcon() {
-  return (
-    <svg
-      viewBox="0 0 16 16"
-      aria-hidden="true"
-      className="h-4 w-4"
-      fill="currentColor"
-    >
-      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
-    </svg>
   );
 }
