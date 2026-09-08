@@ -27,14 +27,23 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Verify the HMAC against the raw body BEFORE parsing JSON.
+  // Verify the HMAC against the raw body BEFORE parsing JSON — the signature is
+  // computed over the raw bytes regardless of the configured content type.
   if (!verifyGithubWebhook(rawBody, signature)) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
+  // GitHub can be configured with either `application/json` or
+  // `application/x-www-form-urlencoded`. In the latter the body is
+  // `payload=<url-encoded JSON>`; unwrap it before parsing.
+  const contentType = request.headers.get("content-type") ?? "";
+  const jsonText = contentType.includes("application/x-www-form-urlencoded")
+    ? (new URLSearchParams(rawBody).get("payload") ?? "")
+    : rawBody;
+
   let payload: Record<string, unknown>;
   try {
-    payload = JSON.parse(rawBody);
+    payload = JSON.parse(jsonText);
   } catch {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
