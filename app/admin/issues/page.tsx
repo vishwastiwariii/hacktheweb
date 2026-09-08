@@ -109,6 +109,7 @@ export default async function AdminIssuesPage({
                 <p className="mt-1 font-mono text-xs text-zinc-500">
                   {issue.repo_full_name} · #{issue.github_issue_number}
                   {issue.claimed && " · claimed"}
+                  {issue.solved && " · solved"}
                 </p>
                 {!issue.metadata_valid && (
                   <p className="mt-2 flex items-start gap-2 text-sm text-red-400">

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/app/lib/supabase/server";
 import CopyJoinCode from "@/app/components/team/copy-join-code";
+import TeamIssuesPanel from "@/app/components/contributions/team-issues-panel";
 import UserAvatar from "@/app/components/ui/user-avatar";
 import {
   MAX_TEAM_SIZE,
@@ -9,6 +10,8 @@ import {
   getTeamPointHistory,
   getUserTeam,
 } from "@/app/lib/services/team.service";
+import { getTeamContributions } from "@/app/lib/services/contribution.service";
+import { getTeamClaims } from "@/app/lib/services/claim.service";
 
 export default async function TeamDashboardPage() {
   const supabase = await createClient();
@@ -35,8 +38,19 @@ export default async function TeamDashboardPage() {
     redirect("/dashboard");
   }
 
-  const pointHistory = await getTeamPointHistory(supabase, team.id, 5).catch(
-    () => [],
+  const [pointHistory, contributions, claims] = await Promise.all([
+    getTeamPointHistory(supabase, team.id, 5).catch(() => []),
+    getTeamContributions(supabase, team.id).catch(() => []),
+    getTeamClaims(supabase, team.id).catch(() => []),
+  ]);
+
+  // A claim already represented by a contribution row is dropped so it doesn't
+  // show twice.
+  const issueIdsWithContribution = new Set(
+    contributions.map((c) => c.issue?.id).filter(Boolean),
+  );
+  const pendingClaims = claims.filter(
+    (claim) => !issueIdsWithContribution.has(claim.issueId),
   );
 
   // Leader first, then in the order members joined.
@@ -180,6 +194,13 @@ export default async function TeamDashboardPage() {
             </div>
           </aside>
         </div>
+
+        <hr className="my-10 border-zinc-800" />
+
+        <TeamIssuesPanel
+          contributions={contributions}
+          pendingClaims={pendingClaims}
+        />
       </div>
     </div>
   );

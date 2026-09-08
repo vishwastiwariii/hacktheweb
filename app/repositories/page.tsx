@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/app/lib/supabase/server";
 import { getIssuesPage } from "@/app/lib/services/issue.service";
 import { getRepositories } from "@/app/lib/services/repository.service";
+import { getUserTeam } from "@/app/lib/services/team.service";
 import AppHeader from "@/app/components/layout/app-header";
 import Pagination from "@/app/components/ui/pagination";
 import IssueRow from "@/app/components/issues/issue-row";
@@ -25,7 +26,12 @@ export default async function RepositoriesPage({
   const eventId = process.env.ACTIVE_EVENT_ID;
   if (!eventId) throw new Error("ACTIVE_EVENT_ID is not configured");
 
-  const repositories = await getRepositories(supabase, eventId);
+  const [repositories, membership] = await Promise.all([
+    getRepositories(supabase, eventId),
+    getUserTeam(supabase, user.id, eventId).catch(() => null),
+  ]);
+  const viewerTeamId = membership?.team.id ?? null;
+  const canClaim = !!membership;
   // Default to the first repo so the page always shows something claimable.
   const selectedRepo =
     (selectedRepoId
@@ -122,7 +128,13 @@ export default async function RepositoriesPage({
                 ) : (
                   <ul className="mt-2 divide-y divide-zinc-800">
                     {result.issues.map((issue) => (
-                      <IssueRow key={issue.id} issue={issue} showRepo={false} />
+                      <IssueRow
+                        key={issue.id}
+                        issue={issue}
+                        showRepo={false}
+                        viewerTeamId={viewerTeamId}
+                        canClaim={canClaim}
+                      />
                     ))}
                   </ul>
                 )}

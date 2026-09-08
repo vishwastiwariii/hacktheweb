@@ -8,3 +8,11 @@ export const setIssueAvailabilitySchema = z.object({
 })
 
 export type SetIssueAvailabilityInput = z.infer<typeof setIssueAvailabilitySchema>
+
+// A participant claiming an issue for their team. The server re-derives the
+// team and re-checks everything else; the client only sends which issue.
+export const claimIssueSchema = z.object({
+    issueId: z.string().uuid("Invalid issue id"),
+})
+
+export type ClaimIssueInput = z.infer<typeof claimIssueSchema>

@@ -8,9 +8,15 @@ import LabelChips from "@/app/components/ui/label-chips";
 export default function IssueRow({
   issue,
   showRepo = true,
+  viewerTeamId = null,
+  canClaim = false,
 }: {
   issue: IssueRecord;
   showRepo?: boolean;
+  // The signed-in viewer's team, and whether they're on one at all — decides
+  // which state the claim control shows.
+  viewerTeamId?: string | null;
+  canClaim?: boolean;
 }) {
   return (
     <li className="flex flex-col gap-4 py-5 sm:flex-row sm:items-start sm:justify-between">
@@ -18,6 +24,11 @@ export default function IssueRow({
         <div className="flex flex-wrap items-center gap-2.5">
           <h3 className="text-base font-bold text-white">{issue.title}</h3>
           <DifficultyBadge difficulty={issue.difficulty} />
+          {issue.solved && (
+            <span className="inline-flex items-center border border-emerald-800/60 bg-emerald-950/40 px-2 py-0.5 text-[11px] font-bold uppercase tracking-widest text-emerald-400">
+              Solved
+            </span>
+          )}
         </div>
         <p className="mt-1 font-mono text-xs text-zinc-500">
           {showRepo && `${issue.repo_full_name} · `}#{issue.github_issue_number}
@@ -45,7 +56,15 @@ export default function IssueRow({
             <ExternalIcon />
             View on GitHub
           </a>
-          <ClaimButton issueId={issue.id} claimed={issue.claimed} />
+          <ClaimButton
+            issueId={issue.id}
+            claimed={issue.claimed}
+            claimedByMyTeam={
+              !!viewerTeamId && issue.claimedByTeamId === viewerTeamId
+            }
+            solved={issue.solved}
+            canClaim={canClaim}
+          />
         </div>
       </div>
     </li>

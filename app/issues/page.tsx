@@ -5,6 +5,7 @@ import {
   getClaimableIssueCounts,
   getIssuesPage,
 } from "@/app/lib/services/issue.service";
+import { getUserTeam } from "@/app/lib/services/team.service";
 import AppHeader from "@/app/components/layout/app-header";
 import Pagination from "@/app/components/ui/pagination";
 import IssueRow from "@/app/components/issues/issue-row";
@@ -28,7 +29,7 @@ export default async function IssuesPage({
   if (!eventId) throw new Error("ACTIVE_EVENT_ID is not configured");
 
   const page = Math.max(1, Number(pageParam ?? "1") || 1);
-  const [result, counts] = await Promise.all([
+  const [result, counts, membership] = await Promise.all([
     getIssuesPage(supabase, {
       eventId,
       claimableOnly: true,
@@ -37,7 +38,10 @@ export default async function IssuesPage({
       orderBy: "points",
     }),
     getClaimableIssueCounts(supabase, eventId),
+    getUserTeam(supabase, user.id, eventId).catch(() => null),
   ]);
+  const viewerTeamId = membership?.team.id ?? null;
+  const canClaim = !!membership;
 
   return (
     <div className="flex flex-1 flex-col bg-[#0e0f12] text-zinc-100">
@@ -87,7 +91,12 @@ export default async function IssuesPage({
         ) : (
           <ul className="divide-y divide-zinc-800">
             {result.issues.map((issue) => (
-              <IssueRow key={issue.id} issue={issue} />
+              <IssueRow
+                key={issue.id}
+                issue={issue}
+                viewerTeamId={viewerTeamId}
+                canClaim={canClaim}
+              />
             ))}
           </ul>
         )}

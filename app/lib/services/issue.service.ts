@@ -20,6 +20,10 @@ type IssueRow = {
     available: boolean;
     metadata_valid: boolean;
     metadata_error: string | null;
+    // Platform-derived: a merged "Fixes #n" PR closed this out. Solved issues
+    // can't be claimed by anyone and render as solved everywhere they're listed.
+    solved: boolean;
+    solved_at: string | null;
     github_created_at: string | null;
     github_updated_at: string | null;
     created_at: string;
@@ -30,6 +34,9 @@ export type IssueRecord = IssueRow & {
     event_id: string;
     repo_full_name: string;
     claimed: boolean;
+    // Which team holds the claim, if any — lets a viewer tell "my team claimed
+    // this" from "someone else did".
+    claimedByTeamId: string | null;
 };
 
 export type IssuePage = {
@@ -41,7 +48,7 @@ export type IssuePage = {
 };
 
 const ISSUE_COLUMNS =
-    "id, repository_id, github_issue_id, github_issue_number, title, description, html_url, points, difficulty, labels, available, metadata_valid, metadata_error, github_created_at, github_updated_at, created_at, updated_at";
+    "id, repository_id, github_issue_id, github_issue_number, title, description, html_url, points, difficulty, labels, available, metadata_valid, metadata_error, solved, solved_at, github_created_at, github_updated_at, created_at, updated_at";
 
 const DEFAULT_PAGE_SIZE = 20;
 
@@ -49,7 +56,7 @@ type EmbeddedRepo = { id: string; event_id: string; owner: string; name: string 
 
 function shape(raw: unknown): IssueRecord {
     const { issue_claims, repositories, ...issue } = raw as IssueRow & {
-        issue_claims: { id: string }[] | null;
+        issue_claims: { id: string; team_id: string | null }[] | null;
         repositories: EmbeddedRepo | EmbeddedRepo[] | null;
     };
     const repo = Array.isArray(repositories) ? repositories[0] ?? null : repositories;
@@ -58,6 +65,7 @@ function shape(raw: unknown): IssueRecord {
         event_id: repo?.event_id ?? "",
         repo_full_name: repo ? `${repo.owner}/${repo.name}` : "unknown",
         claimed: (issue_claims?.length ?? 0) > 0,
+        claimedByTeamId: issue_claims?.[0]?.team_id ?? null,
     };
 }
 
@@ -82,7 +90,7 @@ export async function getIssuesPage(
     let query = supabase
         .from("hackathon_issues")
         .select(
-            `${ISSUE_COLUMNS}, repositories!inner ( id, event_id, owner, name ), issue_claims ( id )`,
+            `${ISSUE_COLUMNS}, repositories!inner ( id, event_id, owner, name ), issue_claims ( id, team_id )`,
             { count: "exact" }
         )
         .eq("repositories.event_id", opts.eventId);
@@ -170,7 +178,7 @@ export async function getIssue(
     const { data, error } = await supabase
         .from("hackathon_issues")
         .select(
-            `${ISSUE_COLUMNS}, repositories ( id, event_id, owner, name ), issue_claims ( id )`
+            `${ISSUE_COLUMNS}, repositories ( id, event_id, owner, name ), issue_claims ( id, team_id )`
         )
         .eq("id", issueId)
         .single();
@@ -196,7 +204,7 @@ export async function setIssueAvailability(
         .update({ available, updated_at: new Date().toISOString() })
         .eq("id", issueId)
         .select(
-            `${ISSUE_COLUMNS}, repositories ( id, event_id, owner, name ), issue_claims ( id )`
+            `${ISSUE_COLUMNS}, repositories ( id, event_id, owner, name ), issue_claims ( id, team_id )`
         )
         .single();
 
