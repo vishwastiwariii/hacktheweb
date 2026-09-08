@@ -18,6 +18,11 @@ So we don't rebuild any of that. We only build the competition around it.
 **We handle:** the event, teams, which issues count, who claimed what, which PR
 belongs to which team, verification, points, point history, and the leaderboard.
 
+**How we talk to GitHub:** the REST API (Octokit) for the admin side — an admin
+pastes a repo URL and we pull the repo and its open issues, and re-import to
+refresh them. Webhooks for everything ongoing — a `pull_request` event is what
+creates and moves a contribution. Webhooks never edit repos or issues.
+
 ---
 
 ## How It Works
@@ -47,9 +52,10 @@ Team gets points → leaderboard updates
 ```
 Create the event
       ↓
-Add repositories
+Import a GitHub repo by URL
+  (issues, points and difficulty come from GitHub labels)
       ↓
-Register issues and set points for each
+Toggle which imported issues are available for the hackathon
       ↓
 Watch teams and incoming PRs
       ↓
@@ -156,8 +162,8 @@ events              the hackathon itself
 profiles            one per user, tied to their GitHub identity
 teams               team name, join code, score
 team_members        who is in which team
-repositories        repos that count for the event
-hackathon_issues    issues registered by admins, each with a point value
+repositories        GitHub repos imported for the event (by URL)
+hackathon_issues    issues imported from GitHub; points/difficulty from labels
 issue_claims        which team claimed which issue
 contributions       one row per pull request we are tracking
 point_transactions  every point change, ever (the ledger)
@@ -234,49 +240,18 @@ npm run start    # run the production build
 npm run lint     # eslint
 ```
 
----
-
-## Build Plan (7 days)
-
-| Day | What gets built |
-|---|---|
-| 1 | Project setup, database schema, GitHub login, app shell |
-| 2 | Create team, join code, join team, team dashboard |
-| 3 | Admin event/repos/issues, issue browser, claiming |
-| 4 | GitHub App, webhook endpoint, contribution tracking |
-| 5 | Review page, scoring engine, point ledger |
-| 6 | Leaderboard, student dashboard, admin tables, responsive UI |
-| 7 | Row Level Security, testing, seed data, deploy |
-
-Day 4 is the risky one. Do not move past it until webhooks are reliable.
-
----
-
 ## Rules For Awarding Points
 
 Points are only given when **all** of this is true:
 
 - the PR author is a registered participant on a team
-- the PR is linked to an issue an admin registered
+- the PR is linked to an imported issue that is `available` and has valid label metadata
 - the PR is actually merged
 - an admin has approved the contribution
 - points have not already been given for that contribution
 
 Everything else scores zero.
 
----
-
-## What We Are Not Building
-
-Skip all of this for the MVP:
-
-chat, a built-in code editor, custom git hosting, advanced analytics, a
-notification system, AI issue suggestions, anti-cheat, heavy gamification, a
-mobile app, background workers, or a complex realtime setup.
-
-The competition engine is the priority.
-
----
 
 ## Definition Of Done
 

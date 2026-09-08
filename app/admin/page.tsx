@@ -13,14 +13,15 @@ const LIVE = [
     description:
       "Check difficulty and point labels, fix bad metadata, and switch issues on or off for claiming.",
   },
+  {
+    href: "/admin/contributions",
+    title: "Contribution review",
+    description:
+      "Open each merged PR, then approve to release the issue's points to the team or reject to award nothing.",
+  },
 ];
 
 const COMING = [
-  {
-    title: "Contribution review",
-    description:
-      "Approve or reject submitted work and release points to the team.",
-  },
   {
     title: "Event config",
     description: "Dates, team size, point values and the leaderboard freeze time.",

@@ -28,6 +28,20 @@ export async function requireAdmin() {
     return { supabase, user, profile }
 }
 
+// Maps an error thrown by requireAdmin() (or a downstream service) to an HTTP
+// status. Route handlers use this so every admin endpoint reports auth failures
+// the same way.
+export function adminErrorResponse(err: unknown): { message: string; status: number } {
+    const message = err instanceof Error ? err.message : "Unexpected error"
+
+    if (message === "Unauthorized User") return { message, status: 401 }
+    if (message === "Not an Admin" || message === "Profile not found") {
+        return { message, status: 403 }
+    }
+    if (/not found/i.test(message)) return { message, status: 404 }
+    return { message, status: 400 }
+}
+
 // For pages / layouts: redirects instead of throwing. `/admin/*` is gated by
 // app/admin/layout.tsx, but pages call this too so each is self-guarding.
 // A missing profile row should not happen (see the profiles_auto_provision
