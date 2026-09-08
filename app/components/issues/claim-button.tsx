@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { claimIssueAction } from "@/app/issues/actions";
 
@@ -25,8 +26,12 @@ export default function ClaimButton({
   solved?: boolean;
   canClaim?: boolean;
 }) {
+  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  // Flip to "Claimed" the instant the claim succeeds, without waiting on the
+  // page to refetch (the durable update still comes from router.refresh()).
+  const [claimedLocally, setClaimedLocally] = useState(false);
 
   if (solved) {
     return (
@@ -36,10 +41,12 @@ export default function ClaimButton({
     );
   }
 
-  if (claimedByMyTeam) {
+  // Once anyone claims it, every viewer sees "Claimed". The owning team gets the
+  // accent tint and a "· your team" hint so they know they hold it.
+  if (claimedByMyTeam || claimedLocally) {
     return (
       <span className={`${PILL} border-accent/50 bg-accent/15 text-accent`}>
-        Your team&apos;s
+        Claimed · your team
       </span>
     );
   }
@@ -71,7 +78,14 @@ export default function ClaimButton({
           setError(null);
           startTransition(async () => {
             const result = await claimIssueAction({ issueId });
-            if (!result.ok) setError(result.error);
+            if (!result.ok) {
+              setError(result.error);
+              return;
+            }
+            // Optimistic flip, then refetch the RSC for the durable state (and
+            // so other rows / counts update too).
+            setClaimedLocally(true);
+            router.refresh();
           });
         }}
         className="inline-flex h-9 shrink-0 items-center justify-center bg-accent px-3 text-sm font-bold text-accent-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
@@ -79,7 +93,7 @@ export default function ClaimButton({
         {pending ? "Claiming…" : "Claim issue"}
       </button>
       {error && (
-        <p className="text-right text-[11px] leading-tight text-red-400">
+        <p className="border border-red-900/50 bg-red-950/40 p-1.5 text-right text-xs leading-tight text-red-400">
           {error}
         </p>
       )}

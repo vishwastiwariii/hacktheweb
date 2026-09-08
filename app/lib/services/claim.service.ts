@@ -89,7 +89,15 @@ export async function claimIssue(
     if (code === "23514") {
       return { ok: false, error: "That issue is already solved." };
     }
-    return { ok: false, error: "Could not claim the issue. Try again." };
+    // Surface the real reason (missing column / RLS / etc.) instead of hiding it
+    // behind a vague retry message.
+    console.error("[claimIssue] insert failed:", insertError);
+    return {
+      ok: false,
+      error:
+        (insertError as { message?: string }).message ??
+        "Could not claim the issue. Try again.",
+    };
   }
 
   return { ok: true };

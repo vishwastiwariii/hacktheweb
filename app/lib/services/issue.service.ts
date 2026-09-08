@@ -54,18 +54,25 @@ const DEFAULT_PAGE_SIZE = 20;
 
 type EmbeddedRepo = { id: string; event_id: string; owner: string; name: string };
 
+type EmbeddedClaim = { id: string; team_id: string | null };
+
 function shape(raw: unknown): IssueRecord {
     const { issue_claims, repositories, ...issue } = raw as IssueRow & {
-        issue_claims: { id: string; team_id: string | null }[] | null;
+        // `issue_claims.issue_id` is UNIQUE, so PostgREST embeds this as a single
+        // object (older data / other shapes can still come through as an array).
+        issue_claims: EmbeddedClaim | EmbeddedClaim[] | null;
         repositories: EmbeddedRepo | EmbeddedRepo[] | null;
     };
     const repo = Array.isArray(repositories) ? repositories[0] ?? null : repositories;
+    const claim = Array.isArray(issue_claims)
+        ? issue_claims[0] ?? null
+        : issue_claims ?? null;
     return {
         ...issue,
         event_id: repo?.event_id ?? "",
         repo_full_name: repo ? `${repo.owner}/${repo.name}` : "unknown",
-        claimed: (issue_claims?.length ?? 0) > 0,
-        claimedByTeamId: issue_claims?.[0]?.team_id ?? null,
+        claimed: claim != null,
+        claimedByTeamId: claim?.team_id ?? null,
     };
 }
 
