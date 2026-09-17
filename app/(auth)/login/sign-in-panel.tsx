@@ -3,9 +3,18 @@
 import { useState } from "react";
 import { createClient } from "@/app/lib/supabase/client";
 
-export default function SignInPanel() {
+export default function SignInPanel({
+  authError = false,
+}: {
+  // True when /auth/callback bounced back with ?error=auth.
+  authError?: boolean;
+}) {
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(
+    authError
+      ? "GitHub sent us back without a valid session. Try signing in again."
+      : null,
+  );
 
   async function signInWithGitHub() {
     setLoading(true);
@@ -30,19 +39,24 @@ export default function SignInPanel() {
   }
 
   return (
-    <div className="w-full max-w-md">
-      <h1 className="text-4xl font-extrabold tracking-tight text-white">
+    <div className="w-full">
+      <p className="htw-label">
+        Identity&nbsp;&nbsp;·&nbsp;&nbsp;
+        <span className="text-[var(--htw-fg)]">GITHUB_OAUTH</span>
+      </p>
+      <h2 className="mt-4 text-3xl font-black uppercase tracking-[-0.03em] text-[var(--htw-fg)]">
         Sign in
-      </h1>
-      <p className="mt-3 text-zinc-400">
-        Sign in with GitHub to join a team and start claiming issues.
+      </h2>
+      <p className="mt-3 text-sm leading-relaxed text-[var(--htw-muted)]">
+        Your GitHub account is your identity on the board. One account, one
+        team.
       </p>
 
       <button
         type="button"
         onClick={signInWithGitHub}
         disabled={loading}
-        className="mt-8 flex h-12 w-full items-center justify-center gap-2.5 bg-accent px-4 text-sm font-bold text-accent-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
+        className="htw-btn htw-mono mt-8 flex h-13 w-full items-center justify-center gap-3 border border-[var(--htw-green)] bg-[var(--htw-green)] px-4 text-sm font-bold uppercase tracking-[0.18em] text-[#060607] transition-[background-color,color,box-shadow] duration-200 hover:bg-transparent hover:text-[var(--htw-green)] hover:shadow-[0_0_32px_var(--htw-green-dim)] disabled:cursor-not-allowed disabled:opacity-70"
       >
         {loading ? (
           <>
@@ -60,16 +74,14 @@ export default function SignInPanel() {
       {error && (
         <div
           role="alert"
-          className="mt-4 border-l-2 border-red-500 bg-red-950/40 px-4 py-3 text-sm text-red-100"
+          className="mt-4 border-l-2 border-[var(--htw-red)] bg-[rgba(255,61,46,0.08)] px-4 py-3 text-sm text-[var(--htw-fg)]"
         >
-          <span className="mr-2 font-bold uppercase tracking-wider text-red-300">
-            Error
-          </span>
+          <span className="htw-label mr-2 text-[var(--htw-red)]">Error</span>
           {error}
         </div>
       )}
 
-      <p className="mt-6 text-sm text-zinc-500">
+      <p className="htw-label mt-6 normal-case tracking-normal">
         We only read your public profile. Nothing is posted on your behalf.
       </p>
     </div>

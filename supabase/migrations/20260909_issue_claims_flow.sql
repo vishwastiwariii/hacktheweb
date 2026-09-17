@@ -39,27 +39,19 @@ create index if not exists issue_claims_team_idx on public.issue_claims (team_id
 -- ---------------------------------------------------------------------------
 alter table public.issue_claims enable row level security;
 
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where tablename = 'issue_claims' and policyname = 'issue_claims_public_read'
-  ) then
-    create policy "issue_claims_public_read" on public.issue_claims
-      for select using (true);
-  end if;
+-- Drop-and-recreate (not "if not exists"): a stale or differently-defined
+-- policy of the same name would otherwise be left in place and keep the claim
+-- rows unreadable.
+drop policy if exists "issue_claims_public_read" on public.issue_claims;
+create policy "issue_claims_public_read" on public.issue_claims
+  for select using (true);
 
-  if not exists (
-    select 1 from pg_policies
-    where tablename = 'issue_claims' and policyname = 'issue_claims_insert_own_team'
-  ) then
-    create policy "issue_claims_insert_own_team" on public.issue_claims
-      for insert to authenticated
-      with check (
-        claimed_by = auth.uid()
-        and public.is_team_member(team_id, auth.uid())
-      );
-  end if;
-end $$;
+drop policy if exists "issue_claims_insert_own_team" on public.issue_claims;
+create policy "issue_claims_insert_own_team" on public.issue_claims
+  for insert to authenticated
+  with check (
+    claimed_by = auth.uid()
+    and public.is_team_member(team_id, auth.uid())
+  );
 
 commit;

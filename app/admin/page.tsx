@@ -46,7 +46,7 @@ export default function AdminHomePage() {
           <Link
             key={card.href}
             href={card.href}
-            className="bg-[#0e0f12] p-8 transition-colors hover:bg-zinc-900/50"
+            className="bg-background p-8 transition-colors hover:bg-zinc-900/50"
           >
             <p className="text-[11px] font-bold uppercase tracking-[0.15em] text-accent">
               Setup

@@ -1,9 +1,12 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/app/lib/supabase/server";
 import AppHeader from "@/app/components/layout/app-header";
 import LeaderboardTicker from "@/app/components/leaderboard/leaderboard-ticker";
 import { getLeaderboard } from "@/app/lib/services/leaderboard.service";
 import { MAX_TEAM_SIZE, getUserTeam } from "@/app/lib/services/team.service";
+
+export const metadata: Metadata = { title: "Battle" };
 
 // Never cache — the ticker calls router.refresh() and expects fresh standings.
 export const dynamic = "force-dynamic";
@@ -36,7 +39,7 @@ export default async function LeaderboardPage() {
   const myTeamId = membership?.team.id ?? null;
 
   return (
-    <div className="flex flex-1 flex-col bg-[#0e0f12] text-zinc-100">
+    <div className="flex flex-1 flex-col bg-background text-zinc-100">
       <AppHeader />
 
       <div className="mx-auto w-full max-w-6xl px-6 py-12">

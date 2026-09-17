@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/app/lib/supabase/server";
@@ -10,6 +11,8 @@ import {
   getUserPoints,
   getUserTeam,
 } from "@/app/lib/services/team.service";
+
+export const metadata: Metadata = { title: "Dashboard" };
 
 const SECONDARY_LINK =
   "inline-flex items-center border border-zinc-700 px-4 py-2.5 text-sm font-bold text-zinc-100 transition-colors hover:bg-zinc-900";
@@ -50,7 +53,7 @@ export default async function DashboardPage() {
   const memberCount = team?.team_members?.length ?? 0;
 
   return (
-    <div className="flex flex-1 flex-col bg-[#0e0f12] text-zinc-100">
+    <div className="flex flex-1 flex-col bg-background text-zinc-100">
       <AppHeader />
 
       <div className="mx-auto w-full max-w-6xl px-6 py-12">

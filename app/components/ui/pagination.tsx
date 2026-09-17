@@ -33,17 +33,15 @@ export default function Pagination({
 
   const cell =
     "inline-flex h-9 min-w-9 items-center justify-center border px-3 text-sm font-bold transition-colors";
-  const enabled =
-    "border-zinc-300 text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-900";
-  const disabled =
-    "border-zinc-200 text-zinc-400 dark:border-zinc-800 dark:text-zinc-600";
+  const enabled = "border-zinc-700 text-zinc-100 hover:bg-zinc-900";
+  const disabled = "border-zinc-800 text-zinc-600";
   const active = "border-accent bg-accent text-accent-foreground";
 
   const prevDisabled = page <= 1;
   const nextDisabled = page >= totalPages;
 
   return (
-    <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-zinc-200 pt-5 dark:border-zinc-800">
+    <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-zinc-800 pt-5">
       {totalPages > 1 ? (
         <div className="flex items-center gap-2">
           {prevDisabled ? (
@@ -86,7 +84,7 @@ export default function Pagination({
         <span />
       )}
 
-      <p className="text-xs text-zinc-500 dark:text-zinc-400">
+      <p className="font-mono text-xs text-zinc-500">
         Showing {start}–{end} of {total}
       </p>
     </div>

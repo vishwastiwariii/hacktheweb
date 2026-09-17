@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/app/lib/supabase/client";
 
 const DEFAULT_CLASS =
-  "h-9 shrink-0 rounded-lg border border-zinc-300 px-4 text-sm font-medium transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-900";
+  "h-9 shrink-0 border border-zinc-700 px-4 text-sm font-bold transition-colors hover:bg-zinc-900";
 
 export default function LogoutButton({
   className,
