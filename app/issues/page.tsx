@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/app/lib/supabase/server";
@@ -9,6 +10,8 @@ import { getUserTeam } from "@/app/lib/services/team.service";
 import AppHeader from "@/app/components/layout/app-header";
 import Pagination from "@/app/components/ui/pagination";
 import IssueRow from "@/app/components/issues/issue-row";
+
+export const metadata: Metadata = { title: "Issues" };
 
 const PAGE_SIZE = 20;
 
@@ -44,7 +47,7 @@ export default async function IssuesPage({
   const canClaim = !!membership;
 
   return (
-    <div className="flex flex-1 flex-col bg-[#0e0f12] text-zinc-100">
+    <div className="flex flex-1 flex-col bg-background text-zinc-100">
       <AppHeader />
 
       <div className="mx-auto w-full max-w-6xl px-6 py-12">

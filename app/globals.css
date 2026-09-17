@@ -1,11 +1,13 @@
 @import "tailwindcss";
 
+/* One palette for the whole product, shared with the landing page:
+   near-black, off-white, acid green, with red/orange for warnings. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-  /* Brand cyan used across the redesigned auth / dashboard / team screens. */
-  --accent: #58cfdd;
-  --accent-foreground: #0a0a0a;
+  --background: #060607;
+  --foreground: #ecece8;
+  --accent: #b6ff2e;
+  --accent-foreground: #060607;
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -17,11 +19,39 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* The app is written against zinc-* / white / emerald / amber. Remap those
+   scales onto the landing palette so every screen matches without rewriting
+   class names: neutrals are near-black greys, "success" is the acid green,
+   "warning" is the landing orange. */
+@theme {
+  --color-white: #ecece8;
+
+  --color-zinc-50: #f4f4f0;
+  --color-zinc-100: #ecece8;
+  --color-zinc-200: #dcdcd8;
+  --color-zinc-300: #c4c4c8;
+  --color-zinc-400: #a0a0a8;
+  --color-zinc-500: #7c7c84;
+  --color-zinc-600: #45454d;
+  --color-zinc-700: #2a2a30;
+  --color-zinc-800: #1a1a1e;
+  --color-zinc-900: #0e0e10;
+  --color-zinc-950: #060607;
+
+  --color-emerald-300: #d2ff7a;
+  --color-emerald-400: #b6ff2e;
+  --color-emerald-500: #9ee312;
+  --color-emerald-800: #4d6e12;
+  --color-emerald-950: #17230a;
+
+  --color-amber-300: #ffb066;
+  --color-amber-400: #ff8a1f;
+  --color-amber-800: #7a3f0c;
+  --color-amber-950: #2a1605;
+
+  --color-red-300: #ff9c92;
+  --color-red-400: #ff6b5e;
+  --color-red-500: #ff3d2e;
 }
 
 body {
@@ -30,4 +60,9 @@ body {
   /* Geist is loaded in app/layout.tsx and exposed as --font-sans. */
   font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system, Arial,
     sans-serif;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--accent-foreground);
 }

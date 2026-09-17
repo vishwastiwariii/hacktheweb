@@ -1,69 +1,98 @@
-import Image from "next/image";
+import type { Metadata } from "next";
+import { createClient } from "@/app/lib/supabase/server";
+import { getRepositories } from "@/app/lib/services/repository.service";
+import { getIssuesPage } from "@/app/lib/services/issue.service";
+import { getLeaderboard } from "@/app/lib/services/leaderboard.service";
+import LandingPage from "@/app/components/landing/landing-page";
+import type {
+  LandingData,
+  LandingEvent,
+} from "@/app/components/landing/types";
 
-export default function Home() {
-  return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
-  );
+export const metadata: Metadata = {
+  title: "Hack The Web — The web is broken. Hack it back.",
+  description:
+    "A 12-hour open-source hackathon. Real repositories, real issues, real contributions. Find the issues. Fix the system. Hack it back.",
+};
+
+// Public landing page. Every read is best-effort: the page must render for a
+// signed-out visitor with no event configured, so each fetch falls back to an
+// empty value and the sections switch to their "sealed" / simulation modes.
+export default async function Home() {
+  const supabase = await createClient();
+  const eventId = process.env.ACTIVE_EVENT_ID?.trim();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  let event: LandingEvent | null = null;
+  let repos: LandingData["repos"] = [];
+  let issueCount = 0;
+  let solvedCount = 0;
+  let leaderboard: LandingData["leaderboard"] = [];
+
+  if (eventId) {
+    const [eventRes, repoRows, issuePage, solvedRes, standings] =
+      await Promise.all([
+        supabase
+          .from("events")
+          .select("name, starts_at, ends_at, registration_open")
+          .eq("id", eventId)
+          .maybeSingle(),
+        getRepositories(supabase, eventId).catch(() => []),
+        getIssuesPage(supabase, {
+          eventId,
+          claimableOnly: true,
+          page: 1,
+          pageSize: 1,
+        }).catch(() => null),
+        supabase
+          .from("hackathon_issues")
+          .select("id, repositories!inner ( event_id )", {
+            count: "exact",
+            head: true,
+          })
+          .eq("repositories.event_id", eventId)
+          .eq("solved", true),
+        getLeaderboard(supabase, eventId).catch(() => []),
+      ]);
+
+    if (eventRes.data) {
+      event = {
+        name: (eventRes.data.name as string | null) ?? "Hack The Web",
+        startsAt: (eventRes.data.starts_at as string | null) ?? null,
+        endsAt: (eventRes.data.ends_at as string | null) ?? null,
+        registrationOpen: Boolean(eventRes.data.registration_open),
+      };
+    }
+    repos = repoRows.map((repo) => ({
+      id: repo.id,
+      owner: repo.owner,
+      name: repo.name,
+      fullName: repo.full_name,
+      htmlUrl: repo.html_url,
+      issueCount: repo.issue_count,
+    }));
+    issueCount = issuePage?.total ?? 0;
+    solvedCount = solvedRes.count ?? 0;
+    leaderboard = standings.map((row) => ({
+      teamId: row.team_id,
+      name: row.name,
+      score: row.score,
+      memberCount: row.member_count,
+      rank: row.rank,
+    }));
+  }
+
+  const data: LandingData = {
+    signedIn: Boolean(user),
+    event,
+    repos,
+    issueCount,
+    solvedCount,
+    leaderboard,
+  };
+
+  return <LandingPage data={data} />;
 }

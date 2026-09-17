@@ -103,6 +103,10 @@ alter table public.contributions add column if not exists repository_id uuid ref
 alter table public.contributions add column if not exists issue_id uuid references public.hackathon_issues(id) on delete set null;
 alter table public.contributions add column if not exists team_id uuid references public.teams(id) on delete set null;
 alter table public.contributions add column if not exists profile_id uuid references public.profiles(id) on delete set null;
+alter table public.contributions add column if not exists github_pr_id bigint;
+alter table public.contributions add column if not exists github_pr_number integer;
+alter table public.contributions add column if not exists repo_full_name text;
+alter table public.contributions add column if not exists pr_author_login text;
 alter table public.contributions add column if not exists pr_title text;
 alter table public.contributions add column if not exists pr_url text;
 alter table public.contributions add column if not exists issue_number integer;

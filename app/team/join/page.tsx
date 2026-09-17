@@ -26,7 +26,7 @@ export default async function JoinTeamPage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col bg-[#0e0f12] text-zinc-100">
+    <div className="flex flex-1 flex-col bg-background text-zinc-100">
       <div className="mx-auto w-full max-w-2xl px-6 py-12">
         <Link
           href="/dashboard"

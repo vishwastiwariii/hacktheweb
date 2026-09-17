@@ -1,0 +1,409 @@
+/* Landing page styles. Everything is scoped under .htw so nothing here leaks
+   into the signed-in app. Colours: near-black, off-white, acid green, with
+   red/orange reserved for "broken" states. */
+
+.htw {
+  --htw-bg: #060607;
+  --htw-fg: #ecece8;
+  --htw-muted: #7c7c84;
+  --htw-line: rgba(236, 236, 232, 0.12);
+  --htw-green: #b6ff2e;
+  --htw-green-dim: rgba(182, 255, 46, 0.16);
+  --htw-red: #ff3d2e;
+  --htw-orange: #ff8a1f;
+
+  background: var(--htw-bg);
+  color: var(--htw-fg);
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.htw ::selection {
+  background: var(--htw-green);
+  color: #060607;
+}
+
+.htw-mono {
+  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo,
+    monospace;
+}
+
+/* Tiny uppercase system label used all over the page. */
+.htw-label {
+  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo,
+    monospace;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--htw-muted);
+}
+
+/* Custom crosshair cursor — only when a fine pointer exists. */
+@media (pointer: fine) {
+  .htw.htw-custom-cursor,
+  .htw.htw-custom-cursor * {
+    cursor: none !important;
+  }
+}
+
+/* Whole-page fade used by the JACK IN transition. */
+.htw-content {
+  transition: opacity 700ms ease, transform 900ms cubic-bezier(0.7, 0, 0.3, 1);
+}
+.htw-jacking .htw-content {
+  opacity: 0;
+  transform: scale(0.96);
+}
+
+/* ---- keyframes -------------------------------------------------------- */
+
+@keyframes htw-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0.15;
+  }
+}
+
+@keyframes htw-caret {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes htw-scan {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(220%);
+  }
+}
+
+@keyframes htw-scroll-hint {
+  0% {
+    transform: scaleY(0);
+    transform-origin: top;
+  }
+  45% {
+    transform: scaleY(1);
+    transform-origin: top;
+  }
+  55% {
+    transform: scaleY(1);
+    transform-origin: bottom;
+  }
+  100% {
+    transform: scaleY(0);
+    transform-origin: bottom;
+  }
+}
+
+@keyframes htw-pulse-ring {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+@keyframes htw-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes htw-travel {
+  0% {
+    left: 0%;
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  92% {
+    opacity: 1;
+  }
+  100% {
+    left: 100%;
+    opacity: 0;
+  }
+}
+
+@keyframes htw-travel-y {
+  0% {
+    top: 0%;
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  92% {
+    opacity: 1;
+  }
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
+}
+
+@keyframes htw-flash {
+  0% {
+    background-color: rgba(182, 255, 46, 0.22);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+@keyframes htw-shake {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  20% {
+    transform: translate(-2px, 1px);
+  }
+  40% {
+    transform: translate(2px, -1px);
+  }
+  60% {
+    transform: translate(-1px, -1px);
+  }
+  80% {
+    transform: translate(1px, 1px);
+  }
+}
+
+/* Occasional text glitch. The pseudo elements carry a copy of the text and
+   pop in for a couple of frames every few seconds. */
+@keyframes htw-glitch-a {
+  0%,
+  93% {
+    opacity: 0;
+    transform: none;
+    clip-path: inset(0 0 100% 0);
+  }
+  94% {
+    opacity: 0.9;
+    transform: translate(-4px, 0);
+    clip-path: inset(12% 0 58% 0);
+  }
+  95.5% {
+    opacity: 0.9;
+    transform: translate(3px, 0);
+    clip-path: inset(62% 0 18% 0);
+  }
+  97% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes htw-glitch-b {
+  0%,
+  96% {
+    opacity: 0;
+    transform: none;
+    clip-path: inset(0 0 100% 0);
+  }
+  97% {
+    opacity: 0.7;
+    transform: translate(4px, 0);
+    clip-path: inset(40% 0 35% 0);
+  }
+  98.2% {
+    opacity: 0.7;
+    transform: translate(-2px, 0);
+    clip-path: inset(5% 0 80% 0);
+  }
+  99% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* ---- components ------------------------------------------------------- */
+
+.htw-blink {
+  animation: htw-blink 1.6s steps(1) infinite;
+}
+
+.htw-caret::after {
+  content: "";
+  display: inline-block;
+  width: 0.55em;
+  height: 1em;
+  margin-left: 0.25em;
+  vertical-align: -0.15em;
+  background: var(--htw-green);
+  animation: htw-caret 1s steps(1) infinite;
+}
+
+.htw-glitch {
+  position: relative;
+  display: inline-block;
+}
+.htw-glitch::before,
+.htw-glitch::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.htw-glitch::before {
+  color: var(--htw-green);
+  animation: htw-glitch-a 7.3s steps(1) infinite;
+}
+.htw-glitch::after {
+  color: var(--htw-red);
+  animation: htw-glitch-b 11.1s steps(1) infinite;
+  animation-delay: 2.4s;
+}
+
+/* Primary button: bordered block with a scan line sweeping across on hover. */
+.htw-btn {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.htw-btn::after {
+  content: "";
+  position: absolute;
+  top: -20%;
+  left: 0;
+  width: 35%;
+  height: 140%;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.35) 50%,
+    transparent 100%
+  );
+  transform: translateX(-120%);
+  pointer-events: none;
+  z-index: 1;
+}
+.htw-btn:hover::after {
+  animation: htw-scan 0.9s ease-out;
+}
+
+.htw-scroll-hint {
+  animation: htw-scroll-hint 2.2s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+
+.htw-orbit {
+  animation: htw-orbit 14s linear infinite;
+}
+
+.htw-travel {
+  animation: htw-travel 2.6s linear infinite;
+}
+.htw-travel-y {
+  animation: htw-travel-y 2.6s linear infinite;
+}
+
+.htw-flash {
+  animation: htw-flash 1.2s ease-out;
+}
+
+.htw-shake {
+  animation: htw-shake 0.35s linear infinite;
+}
+
+.htw-pulse-ring {
+  animation: htw-pulse-ring 2.4s ease-out infinite;
+}
+
+/* Leaderboard "energy" bar — looks like a row of █ blocks. */
+.htw-bar {
+  background-image: repeating-linear-gradient(
+    to right,
+    currentColor 0,
+    currentColor 9px,
+    transparent 9px,
+    transparent 12px
+  );
+}
+
+/* Range input used by the countdown scrubber. */
+.htw-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 24px;
+  background: transparent;
+}
+.htw-range::-webkit-slider-runnable-track {
+  height: 2px;
+  background: var(--htw-line);
+}
+.htw-range::-moz-range-track {
+  height: 2px;
+  background: var(--htw-line);
+}
+.htw-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -6px;
+  border: 2px solid var(--htw-green);
+  background: var(--htw-bg);
+  border-radius: 0;
+  transform: rotate(45deg);
+}
+.htw-range::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--htw-green);
+  background: var(--htw-bg);
+  border-radius: 0;
+  transform: rotate(45deg);
+}
+
+/* Faint grid behind text-heavy sections so they still feel "in the system".
+   Drawn on a pseudo element so the fade-out mask never touches the content. */
+.htw-grid {
+  position: relative;
+}
+.htw-grid::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(var(--htw-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--htw-line) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%);
+}
+.htw-grid > * {
+  position: relative;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .htw *,
+  .htw *::before,
+  .htw *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
