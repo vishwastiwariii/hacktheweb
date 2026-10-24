@@ -24,21 +24,48 @@ function errorResponse(err: unknown) {
         typeof (err as { status?: unknown })?.status === "number"
             ? (err as { status: number }).status
             : null;
+    // Log the GitHub status + message (never the token) so the real cause shows
+    // up in the deployment logs, not just a generic 502.
+    if (status !== null) {
+        console.error(`[import] GitHub API error ${status}: ${message}`);
+    }
+
     if (status === 404) {
         return NextResponse.json(
             { error: "Repository not found or not accessible with the configured token" },
             { status: 404 },
         );
     }
-    if (status === 401 || status === 403) {
-        const rateLimited = /rate limit/i.test(message);
+    if (status === 401) {
         return NextResponse.json(
             {
-                error: rateLimited
-                    ? "GitHub rate limit reached — try again later"
-                    : "GitHub authentication or permission problem",
+                error:
+                    "GitHub rejected GITHUB_TOKEN (bad credentials) — it is invalid, expired, revoked, or pasted with extra quotes/spaces",
             },
-            { status: rateLimited ? 429 : 502 },
+            { status: 502 },
+        );
+    }
+    if (status === 403) {
+        const rateLimited = /rate limit/i.test(message);
+        if (rateLimited) {
+            return NextResponse.json(
+                { error: "GitHub rate limit reached — try again later" },
+                { status: 429 },
+            );
+        }
+        return NextResponse.json(
+            {
+                error: /SAML|SSO/i.test(message)
+                    ? "GITHUB_TOKEN must be SSO-authorized for this organization"
+                    : "GITHUB_TOKEN can't read this repo's issues — give it Issues: Read and Metadata: Read access to this repository",
+            },
+            { status: 502 },
+        );
+    }
+    if (status === 410) {
+        return NextResponse.json(
+            { error: "Issues are disabled on this repository — enable them in its GitHub settings" },
+            { status: 400 },
         );
     }
     if (status === 429) {

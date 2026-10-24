@@ -19,6 +19,12 @@ const LIVE = [
     description:
       "Open each merged PR, then approve to release the issue's points to the team or reject to award nothing.",
   },
+  {
+    href: "/admin/teams",
+    title: "Team points",
+    description:
+      "Add or remove points for any team by hand — bonuses, penalties, or work the PR pipeline couldn't match.",
+  },
 ];
 
 const COMING = [

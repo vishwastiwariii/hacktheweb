@@ -68,7 +68,6 @@ export async function importGitHubRepository(
             difficulty = parsed.difficulty;
 
             if (points === null) metadataError = "Missing points:* label";
-            else if (difficulty === null) metadataError = "Missing difficulty:* label";
         } catch (err) {
             metadataError = err instanceof Error ? err.message : "Invalid labels";
         }

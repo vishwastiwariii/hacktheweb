@@ -1,25 +1,33 @@
 // GitHub's own closing-keyword syntax: `Fixes #42`, `Closes: #42`,
 // `Resolves owner/repo#42`. The optional colon mirrors what GitHub accepts.
-const ISSUE_PATTERNS = [
-  /\b(?:fixes|fixed|fix|closes|closed|close|resolves|resolved|resolve)\s*:?\s+#(\d+)/gi,
-  /\b(?:fixes|fixed|fix|closes|closed|close|resolves|resolved|resolve)\s*:?\s+[\w.-]+\/[\w.-]+#(\d+)/gi,
-];
+// A cross-repo reference only counts when it names the PR's own repo — issue
+// #42 of some other repo is not issue #42 here.
+const KEYWORDS = "fixes|fixed|fix|closes|closed|close|resolves|resolved|resolve";
+const ISSUE_PATTERN = new RegExp(
+    `\\b(?:${KEYWORDS})\\s*:?\\s+(?:([\\w.-]+\\/[\\w.-]+))?#(\\d+)`,
+    "gi",
+);
 
 export function extractGithubIssueNumber (
     title: string, 
-    body: string | null
+    body: string | null,
+    repoFullName?: string,
 ) : number[] {
     const text = `${title}\n${body ?? ""}`; 
+    const ownRepo = repoFullName?.toLowerCase();
 
     const issues = new Set<number>(); 
 
-    for (const pattern of ISSUE_PATTERNS) {
-        for (const match of text.matchAll(pattern)) {
-            const number = Number(match[1]); 
+    for (const match of text.matchAll(ISSUE_PATTERN)) {
+        const repo = match[1]?.toLowerCase();
+        if (repo && repo !== ownRepo) {
+            continue;
+        }
 
-            if (Number.isInteger(number)) {
-                issues.add(number)
-            }
+        const number = Number(match[2]); 
+
+        if (Number.isInteger(number)) {
+            issues.add(number)
         }
     }
 
