@@ -3,8 +3,9 @@ import type { Difficulty } from "@/app/lib/github/labels";
 import type { TeamContributionStatus } from "@/app/lib/services/contribution.service";
 
 // The buckets the review screen offers. "NEEDS_ATTENTION" folds the two side
-// states an admin resolves by hand.
+// states an admin resolves by hand; "OPEN" is PRs not merged yet.
 export type ReviewFilter =
+  | "OPEN"
   | "PENDING_REVIEW"
   | "APPROVED"
   | "REJECTED"
@@ -15,7 +16,8 @@ const FILTER_STATUSES: Record<
   Exclude<ReviewFilter, "ALL">,
   TeamContributionStatus[]
 > = {
-  PENDING_REVIEW: ["PENDING_REVIEW"],
+  OPEN: ["OPEN"],
+  PENDING_REVIEW: ["PENDING_REVIEW", "MERGED"],
   APPROVED: ["APPROVED"],
   REJECTED: ["REJECTED"],
   NEEDS_ATTENTION: ["UNMATCHED", "NEEDS_ISSUE_MAPPING"],
@@ -42,6 +44,9 @@ export type ReviewItem = {
     difficulty: Difficulty | null;
     htmlUrl: string | null;
     repoFullName: string;
+    // approve_contribution() refuses unless both are true.
+    available: boolean;
+    metadataValid: boolean;
   } | null;
   // The point value that would be awarded on approve — straight from the issue
   // label, shown so the admin sees it before clicking.
@@ -64,6 +69,8 @@ type RawIssue = {
   points: number | null;
   difficulty: Difficulty | null;
   html_url: string | null;
+  available: boolean;
+  metadata_valid: boolean;
   repositories: RawRepo | RawRepo[] | null;
 };
 type RawTeam = { id: string; name: string };
@@ -115,6 +122,8 @@ function shape(raw: RawRow): ReviewItem {
           difficulty: issueRow.difficulty ?? null,
           htmlUrl: issueRow.html_url,
           repoFullName: repo ? `${repo.owner}/${repo.name}` : "unknown",
+          available: issueRow.available,
+          metadataValid: issueRow.metadata_valid,
         }
       : null,
     awardablePoints: points,
@@ -127,6 +136,7 @@ const SELECT = `
   teams ( id, name ),
   hackathon_issues (
     id, title, github_issue_number, points, difficulty, html_url,
+    available, metadata_valid,
     repositories ( owner, name )
   )
 `;
@@ -166,6 +176,37 @@ export async function getReviewQueue(
     pageSize,
     totalPages: Math.max(1, Math.ceil(total / pageSize)),
   };
+}
+
+// How many contributions sit in each bucket, for the tab badges. One small
+// status-only read; an event has hundreds of PRs at most.
+export async function getReviewCounts(
+  supabase: SupabaseClient,
+  eventId: string,
+): Promise<Record<ReviewFilter, number>> {
+  const { data, error } = await supabase
+    .from("contributions")
+    .select("status")
+    .eq("event_id", eventId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const counts: Record<ReviewFilter, number> = {
+    OPEN: 0,
+    PENDING_REVIEW: 0,
+    APPROVED: 0,
+    REJECTED: 0,
+    NEEDS_ATTENTION: 0,
+    ALL: data?.length ?? 0,
+  };
+  for (const row of (data ?? []) as { status: TeamContributionStatus }[]) {
+    for (const [filter, statuses] of Object.entries(FILTER_STATUSES)) {
+      if (statuses.includes(row.status)) counts[filter as ReviewFilter]++;
+    }
+  }
+  return counts;
 }
 
 export type ReviewActionResult =

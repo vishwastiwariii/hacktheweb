@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireAdminPage } from "@/app/lib/auth/admin";
 import {
+  getReviewCounts,
   getReviewQueue,
   type ReviewFilter,
   type ReviewItem,
@@ -8,11 +9,13 @@ import {
 import Pagination from "@/app/components/ui/pagination";
 import DifficultyBadge from "@/app/components/ui/difficulty-badge";
 import ReviewActions from "@/app/components/admin/review-actions";
+import SyncPullRequestsButton from "@/app/components/admin/sync-pull-requests-button";
 
 const PAGE_SIZE = 20;
 
 const TABS: { key: ReviewFilter; label: string }[] = [
   { key: "PENDING_REVIEW", label: "Pending" },
+  { key: "OPEN", label: "Open PRs" },
   { key: "NEEDS_ATTENTION", label: "Needs attention" },
   { key: "APPROVED", label: "Approved" },
   { key: "REJECTED", label: "Rejected" },
@@ -35,6 +38,10 @@ function blockedReason(item: ReviewItem): string | null {
   if (!item.merged) return "The pull request isn't merged yet.";
   if (!item.team) return "PR author isn't on a team — resolve UNMATCHED first.";
   if (!item.issue) return "No issue is mapped — resolve NEEDS_ISSUE_MAPPING first.";
+  if (!item.issue.metadataValid)
+    return "The issue's points/difficulty labels are invalid — fix them on GitHub and re-import.";
+  if (!item.issue.available)
+    return "The issue isn't marked available — switch it on in Issues first.";
   if (item.status !== "PENDING_REVIEW") return "Not pending review.";
   return null;
 }
@@ -56,11 +63,10 @@ export default async function AdminContributionsPage({
     : "PENDING_REVIEW";
   const page = Math.max(1, Number(pageParam ?? "1") || 1);
 
-  const queue = await getReviewQueue(supabase, eventId, {
-    filter,
-    page,
-    pageSize: PAGE_SIZE,
-  });
+  const [queue, counts] = await Promise.all([
+    getReviewQueue(supabase, eventId, { filter, page, pageSize: PAGE_SIZE }),
+    getReviewCounts(supabase, eventId),
+  ]);
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
@@ -78,8 +84,17 @@ export default async function AdminContributionsPage({
         Every pull request the platform is tracking. Open the PR to check the
         work, then approve to release the issue&apos;s points to the team, or
         reject to award nothing. Point values come from the GitHub label — they
-        can&apos;t be edited here.
+        can&apos;t be edited here. For bonuses, penalties or a PR that can&apos;t
+        be matched, use{" "}
+        <Link href="/admin/teams" className="font-medium text-accent hover:underline">
+          Team points
+        </Link>
+        .
       </p>
+
+      <div className="mt-6">
+        <SyncPullRequestsButton />
+      </div>
 
       <div className="mt-8 flex flex-wrap gap-2 border-y border-zinc-800 py-4">
         {TABS.map((tab) => {
@@ -94,7 +109,10 @@ export default async function AdminContributionsPage({
                   : "border-zinc-700 text-zinc-300 hover:bg-zinc-900"
               }`}
             >
-              {tab.label}
+              {tab.label}{" "}
+              <span className={active ? "opacity-80" : "text-zinc-500"}>
+                {counts[tab.key]}
+              </span>
             </Link>
           );
         })}
@@ -108,6 +126,14 @@ export default async function AdminContributionsPage({
               ? "No merged PRs are waiting on a decision."
               : "No contributions in this bucket yet."}
           </p>
+          {counts.ALL === 0 && (
+            <p className="mt-2 text-sm text-zinc-500">
+              No PRs have been recorded at all. If participants have opened PRs,
+              the GitHub webhook isn&apos;t reaching the platform — press{" "}
+              <span className="font-bold text-zinc-300">Sync PRs from GitHub</span>{" "}
+              above to pull them in.
+            </p>
+          )}
         </div>
       ) : (
         <ul className="divide-y divide-zinc-800">
@@ -193,12 +219,7 @@ export default async function AdminContributionsPage({
                   <ReviewActions
                     contributionId={item.id}
                     status={item.status}
-                    canApprove={
-                      item.status === "PENDING_REVIEW" &&
-                      item.merged &&
-                      !!item.team &&
-                      !!item.issue
-                    }
+                    canApprove={item.status === "PENDING_REVIEW" && !reason}
                     blockedReason={reason}
                     awardablePoints={item.awardablePoints}
                   />

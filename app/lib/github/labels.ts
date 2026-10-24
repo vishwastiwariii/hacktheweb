@@ -28,8 +28,9 @@ export function parseIssueLabels(labels: RawLabel[]): IssueMetadata {
     for (const name of labelNames(labels).map((n) => n.toLowerCase())) {
         if (name.startsWith("points:")) {
             pointsFound++;
-            const value = Number(name.slice("points:".length).trim());
-            if (!Number.isInteger(value) || value < 0) {
+            const raw = name.slice("points:".length).trim();
+            const value = Number(raw);
+            if (!/^\d+$/.test(raw) || !Number.isSafeInteger(value)) {
                 throw new Error(`Invalid points label: "${name}"`);
             }
             points = value;

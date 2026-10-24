@@ -10,6 +10,7 @@ const NAV = [
   { href: "/admin/repositories", label: "Targets" },
   { href: "/admin/issues", label: "Issues" },
   { href: "/admin/contributions", label: "Review" },
+  { href: "/admin/teams", label: "Points" },
 ];
 
 const NAV_LINK =

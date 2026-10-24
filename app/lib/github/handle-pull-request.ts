@@ -1,9 +1,16 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { extractGithubIssueNumber } from "./issue-mapper";
 
-// Actions that move a contribution forward. Everything else on `pull_request`
-// (edited, labeled, assigned, review_requested, …) is stored but not processed.
-const HANDLED_ACTIONS = new Set(["opened", "reopened", "synchronize", "closed"]);
+// Actions that move a contribution forward. `edited` is included so fixing a
+// missing "Fixes #n" in the PR description (even after merge) re-maps the PR.
+// Everything else (labeled, assigned, review_requested, …) is stored only.
+const HANDLED_ACTIONS = new Set([
+  "opened",
+  "reopened",
+  "synchronize",
+  "edited",
+  "closed",
+]);
 
 // Once an admin has ruled on a contribution, later webhooks refresh the
 // GitHub-derived fields but must not move `status` back.
@@ -13,7 +20,7 @@ export type HandlePullRequestResult =
   | { processed: false; reason: string }
   | { processed: true; contributionId: string; status: string };
 
-type PullRequestPayload = {
+export type PullRequestPayload = {
   action?: string;
   pull_request?: {
     id?: number;
@@ -66,11 +73,18 @@ export async function handlePullRequestEvent(
   }
 
   // The PR must belong to a repository imported for an event.
-  const { data: repository, error: repoError } = await supabase
+  // Unique per (event_id, github_repo_id), so scope to the active event when
+  // one is configured — otherwise a repo imported into two events would match
+  // twice and maybeSingle() would fail.
+  let repoQuery = supabase
     .from("repositories")
     .select("id, event_id")
-    .eq("github_repo_id", githubRepoId)
-    .maybeSingle();
+    .eq("github_repo_id", githubRepoId);
+  const activeEventId = process.env.ACTIVE_EVENT_ID?.trim();
+  if (activeEventId) {
+    repoQuery = repoQuery.eq("event_id", activeEventId);
+  }
+  const { data: repository, error: repoError } = await repoQuery.maybeSingle();
 
   if (repoError) {
     throw new Error(`repository lookup failed: ${repoError.message}`);
@@ -88,35 +102,48 @@ export async function handlePullRequestEvent(
   // Identify the participant by GitHub login (case-insensitive).
   let profileId: string | null = null;
   if (authorLogin) {
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("id")
       .ilike("github_username", authorLogin)
       .maybeSingle();
+    if (profileError) {
+      throw new Error(`profile lookup failed: ${profileError.message}`);
+    }
     profileId = (profile?.id as string | undefined) ?? null;
   }
 
   // Their team — one membership per user for the single active event.
   let teamId: string | null = null;
   if (profileId) {
-    const { data: membership } = await supabase
+    const { data: membership, error: membershipError } = await supabase
       .from("team_members")
       .select("team_id")
       .eq("user_id", profileId)
       .maybeSingle();
+    if (membershipError) {
+      throw new Error(`team lookup failed: ${membershipError.message}`);
+    }
     teamId = (membership?.team_id as string | undefined) ?? null;
   }
 
   // Map the PR to an imported issue via "Fixes #n" in the title/body.
-  const [issueNumber] = extractGithubIssueNumber(pr.title ?? "", pr.body ?? null);
+  const [issueNumber] = extractGithubIssueNumber(
+    pr.title ?? "",
+    pr.body ?? null,
+    repoFullName,
+  );
   let issueId: string | null = null;
   if (typeof issueNumber === "number") {
-    const { data: issue } = await supabase
+    const { data: issue, error: issueError } = await supabase
       .from("hackathon_issues")
       .select("id")
       .eq("repository_id", repository.id)
       .eq("github_issue_number", issueNumber)
       .maybeSingle();
+    if (issueError) {
+      throw new Error(`issue lookup failed: ${issueError.message}`);
+    }
     issueId = (issue?.id as string | undefined) ?? null;
   }
 
@@ -127,25 +154,41 @@ export async function handlePullRequestEvent(
   });
 
   // Preserve an admin ruling if one already exists on this PR.
-  const { data: existing } = await supabase
+  const { data: existing, error: existingError } = await supabase
     .from("contributions")
-    .select("status")
+    .select("status, issue_id, issue_number, team_id, profile_id")
     .eq("event_id", repository.event_id)
     .eq("github_pr_id", pr.id)
     .maybeSingle();
+  if (existingError) {
+    throw new Error(`contribution lookup failed: ${existingError.message}`);
+  }
 
-  const status =
-    existing && ADMIN_OWNED_STATUS.has(existing.status as string)
-      ? (existing.status as string)
-      : computedStatus;
+  // An admin ruling also freezes who/what it was ruled on: the ledger row
+  // points at that team and issue, so a later PR edit or team change must not
+  // move them.
+  const ruled = Boolean(
+    existing && ADMIN_OWNED_STATUS.has(existing.status as string),
+  );
 
   const row = {
     event_id: repository.event_id,
     repository_id: repository.id,
-    issue_id: issueId,
-    issue_number: typeof issueNumber === "number" ? issueNumber : null,
-    team_id: teamId,
-    profile_id: profileId,
+    ...(ruled
+      ? {
+          issue_id: existing!.issue_id as string | null,
+          issue_number: existing!.issue_number as number | null,
+          team_id: existing!.team_id as string | null,
+          profile_id: existing!.profile_id as string | null,
+          status: existing!.status as string,
+        }
+      : {
+          issue_id: issueId,
+          issue_number: typeof issueNumber === "number" ? issueNumber : null,
+          team_id: teamId,
+          profile_id: profileId,
+          status: computedStatus,
+        }),
     github_pr_id: pr.id,
     github_pr_number: pr.number,
     repo_full_name: repoFullName,
@@ -154,7 +197,6 @@ export async function handlePullRequestEvent(
     pr_url: pr.html_url ?? null,
     merged,
     merged_at: pr.merged_at ?? null,
-    status,
     updated_at: new Date().toISOString(),
     // `points_awarded` is deliberately omitted: a webhook never resets it.
   };
@@ -170,8 +212,13 @@ export async function handlePullRequestEvent(
   }
 
   // A merged "Fixes #n" PR marks the issue solved -> no other team can claim it.
-  if (issueId) {
-    await syncIssueSolvedState(supabase, issueId);
+  const touchedIssues = new Set(
+    [row.issue_id, existing?.issue_id as string | null | undefined].filter(
+      (id): id is string => Boolean(id),
+    ),
+  );
+  for (const id of touchedIssues) {
+    await syncIssueSolvedState(supabase, id);
   }
 
   return {
@@ -188,28 +235,32 @@ async function syncIssueSolvedState(
   supabase: SupabaseClient,
   issueId: string,
 ): Promise<void> {
-  const { data: solvers } = await supabase
+  const { data: solvers, error: solversError } = await supabase
     .from("contributions")
     .select("id")
     .eq("issue_id", issueId)
     .eq("merged", true)
     .neq("status", "REJECTED")
     .limit(1);
+  if (solversError) {
+    throw new Error(`solved recompute failed: ${solversError.message}`);
+  }
 
   const solved = (solvers?.length ?? 0) > 0;
 
-  if (solved) {
-    // Stamp solved_at only the first time it flips.
-    await supabase
-      .from("hackathon_issues")
-      .update({ solved: true, solved_at: new Date().toISOString() })
-      .eq("id", issueId)
-      .eq("solved", false);
-  } else {
-    await supabase
-      .from("hackathon_issues")
-      .update({ solved: false, solved_at: null })
-      .eq("id", issueId)
-      .eq("solved", true);
+  // Stamp solved_at only the first time it flips.
+  const { error } = solved
+    ? await supabase
+        .from("hackathon_issues")
+        .update({ solved: true, solved_at: new Date().toISOString() })
+        .eq("id", issueId)
+        .eq("solved", false)
+    : await supabase
+        .from("hackathon_issues")
+        .update({ solved: false, solved_at: null })
+        .eq("id", issueId)
+        .eq("solved", true);
+  if (error) {
+    throw new Error(`solved update failed: ${error.message}`);
   }
 }

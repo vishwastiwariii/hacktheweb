@@ -3,6 +3,7 @@ import { adminErrorResponse, requireAdmin } from "@/app/lib/auth/admin";
 import { getReviewQueue, type ReviewFilter } from "@/app/lib/services/review.service";
 
 const FILTERS: ReviewFilter[] = [
+  "OPEN",
   "PENDING_REVIEW",
   "APPROVED",
   "REJECTED",

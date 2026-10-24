@@ -163,6 +163,12 @@ Zod-validated, client sends only `contributionId`):
   `ADJUSTMENT` ledger row instead.
 - `auth.uid()` inside both functions is the reviewer; they also re-check
   `profiles.is_admin`.
+- Manual adjustments: `/admin/teams` → `POST /api/admin/teams/points`
+  (`{ teamId, amount, reason }`, Zod in `app/lib/validation/points.ts`) →
+  `adjust_team_points(uuid, int, text)` (`20260910_manual_point_adjustments.sql`):
+  one transaction that inserts an `ADJUSTMENT` ledger row with the reason and
+  admin id, and moves `teams.score` by the same amount. Refuses 0, a blank
+  reason, or a result below 0.
 
 ## GitHub import
 
@@ -215,10 +221,16 @@ GitHub → verify signature → store webhook_events → return 200 → process 
 - Store the raw payload (unique `delivery_id`) **before** processing; processing
   runs in `after()` once the 200 is sent, and records `processed_at` /
   `process_error` on the row so a failure can be replayed.
-- Handle `pull_request` with actions `opened`, `reopened`, `synchronize`, `closed`.
-  Merged means `pull_request.merged === true`, not just `closed`.
+- Handle `pull_request` with actions `opened`, `reopened`, `synchronize`,
+  `edited`, `closed`. Merged means `pull_request.merged === true`, not just
+  `closed`. `edited` lets a participant add a missing `Fixes #n` after merge.
 - Parse `Fixes #42` / `Closes #42` / `Resolves #42` from the PR title and body to
   map a PR to an issue. If that fails, set `NEEDS_ISSUE_MAPPING` rather than guessing.
+  A cross-repo `owner/repo#n` only counts when it names the PR's own repo.
+- **Backfill:** `POST /api/admin/contributions/sync` (admin, "Sync PRs from
+  GitHub" on `/admin/contributions`) lists every PR of the event's repos over
+  REST and replays each through the same `handlePullRequestEvent`, for merges
+  the webhook never delivered. Idempotent; uses the service-role client.
 - The webhook advances a contribution only through `OPEN` / `PENDING_REVIEW` /
   `UNMATCHED` / `NEEDS_ISSUE_MAPPING`. Once it is `APPROVED` / `REJECTED` (admin),
   later deliveries refresh GitHub fields but never move `status` or
