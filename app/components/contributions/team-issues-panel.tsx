@@ -96,6 +96,16 @@ function Row({
   );
 }
 
+// Unsolved claims lapse after CLAIM_TTL_MINUTES; say how long is left.
+function claimBadgeLabel(expiresAt: string | null): string {
+  if (!expiresAt) return "Claimed · no PR yet";
+  const minutesLeft = Math.max(
+    0,
+    Math.ceil((new Date(expiresAt).getTime() - Date.now()) / 60_000),
+  );
+  return `Claimed · no PR yet · released in ${minutesLeft} min`;
+}
+
 // The team's issue work, solved ones surfaced first: every tracked pull request,
 // plus claims that don't have a PR yet. Lives on /dashboard/team. Server
 // component — no interactivity.
@@ -166,7 +176,7 @@ export default function TeamIssuesPanel({
               reference={`${claim.repoFullName} · #${claim.number}`}
               difficulty={claim.difficulty}
               points={claim.points}
-              badge={{ label: "Claimed · no PR yet", tone: "open" }}
+              badge={{ label: claimBadgeLabel(claim.expiresAt), tone: "open" }}
               links={
                 claim.htmlUrl
                   ? [

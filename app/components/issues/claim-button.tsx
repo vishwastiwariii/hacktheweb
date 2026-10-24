@@ -19,12 +19,15 @@ export default function ClaimButton({
   claimedByMyTeam = false,
   solved = false,
   canClaim = false,
+  expiresAt = null,
 }: {
   issueId: string;
   claimed?: boolean;
   claimedByMyTeam?: boolean;
   solved?: boolean;
   canClaim?: boolean;
+  // When this team's claim lapses unless the issue is solved first.
+  expiresAt?: string | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -32,6 +35,8 @@ export default function ClaimButton({
   // Flip to "Claimed" the instant the claim succeeds, without waiting on the
   // page to refetch (the durable update still comes from router.refresh()).
   const [claimedLocally, setClaimedLocally] = useState(false);
+  // Read once per mount for the expiry countdown; refreshes re-render it.
+  const [now] = useState(() => Date.now());
 
   if (solved) {
     return (
@@ -44,10 +49,21 @@ export default function ClaimButton({
   // Once anyone claims it, every viewer sees "Claimed". The owning team gets the
   // accent tint and a "· your team" hint so they know they hold it.
   if (claimedByMyTeam || claimedLocally) {
+    const minutesLeft = expiresAt
+      ? Math.max(0, Math.ceil((new Date(expiresAt).getTime() - now) / 60_000))
+      : null;
     return (
-      <span className={`${PILL} border-accent/50 bg-accent/15 text-accent`}>
-        Claimed · your team
-      </span>
+      <div className="flex flex-col items-stretch gap-1">
+        <span className={`${PILL} border-accent/50 bg-accent/15 text-accent`}>
+          Claimed · your team
+        </span>
+        {minutesLeft !== null && (
+          // Minutes are computed at render on both server and client.
+          <p suppressHydrationWarning className="text-right text-xs text-zinc-500">
+            Released in {minutesLeft} min unless merged
+          </p>
+        )}
+      </div>
     );
   }
 

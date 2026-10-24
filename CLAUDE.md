@@ -119,8 +119,20 @@ Neither earns points until resolved.
 ## Claiming
 
 A claim is a team taking an issue so nobody else works on it. One active claim
-per issue (`issue_claims` unique on `issue_id`); claims aren't released, they end
-when the issue is solved.
+per issue (`issue_claims` unique on `issue_id`). A claim is kept for good once
+the issue is solved; an unsolved claim (no merged `Fixes #n` PR — an open PR
+doesn't count) **lapses 30 minutes after it was taken**
+(`20260911_claim_expiry.sql`):
+
+- `release_expired_claims()` (SECURITY DEFINER, callable by anon) deletes lapsed
+  claims. `releaseExpiredClaims()` in `claim.service.ts` runs it before every
+  claim read — issue lists/counts, `getIssue`, `claimIssue`, `getTeamClaims` —
+  so nothing reads a stale claim and no scheduler is required.
+- The `issue_claims_release_expired` BEFORE INSERT trigger frees a lapsed claim
+  on the same issue, so `unique (issue_id)` never blocks re-claiming.
+- If pg_cron is enabled, a `release-expired-claims` job sweeps every minute.
+- `CLAIM_TTL_MINUTES` in `claim.service.ts` mirrors the SQL interval for the UI
+  countdown — change both together.
 
 - `claimIssueAction` (`app/issues/actions.ts`) → `claimIssue`
   (`app/lib/services/claim.service.ts`). The client sends only the issue id; the

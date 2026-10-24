@@ -2,9 +2,34 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Difficulty } from "@/app/lib/github/labels";
 import { getUserTeam } from "./team.service";
 
-// Generous cap so one team can't sit on the whole board. Claims are permanent
-// until the issue is solved, so this is a soft guardrail, not a queue.
+// Generous cap so one team can't sit on the whole board. Claims also lapse
+// after CLAIM_TTL_MINUTES unless the issue is solved, so this is a soft
+// guardrail, not a queue.
 export const MAX_ACTIVE_CLAIMS_PER_TEAM = 5;
+
+// A claim on an issue that's still unsolved (no merged "Fixes #n" PR) this long
+// after it was taken is released. Display-only mirror of the interval in
+// release_expired_claims() (20260911_claim_expiry.sql) — change both together.
+export const CLAIM_TTL_MINUTES = 30;
+
+export function claimExpiresAt(claimedAt: string | null): string | null {
+  if (!claimedAt) return null;
+  return new Date(
+    new Date(claimedAt).getTime() + CLAIM_TTL_MINUTES * 60_000,
+  ).toISOString();
+}
+
+// Deletes every lapsed claim. Run before reading claims so lists, counts and
+// the team limit never see a stale one. Best-effort: the claim insert trigger
+// frees a lapsed claim on its own, so a failure here only delays the cleanup.
+export async function releaseExpiredClaims(
+  supabase: SupabaseClient,
+): Promise<void> {
+  const { error } = await supabase.rpc("release_expired_claims");
+  if (error) {
+    console.error("[releaseExpiredClaims] failed:", error.message);
+  }
+}
 
 export type ClaimResult = { ok: true } | { ok: false; error: string };
 
@@ -16,6 +41,10 @@ export async function claimIssue(
   eventId: string,
   issueId: string,
 ): Promise<ClaimResult> {
+  // Lapsed claims first, so neither the "already claimed" check nor the team
+  // limit counts them.
+  await releaseExpiredClaims(supabase);
+
   // 1. The claimer must be on a team for the active event.
   const membership = await getUserTeam(supabase, userId, eventId);
   if (!membership) {
@@ -113,6 +142,8 @@ export type TeamClaim = {
   solved: boolean;
   repoFullName: string;
   claimedAt: string | null;
+  // When the claim lapses if the issue isn't solved by then; null once solved.
+  expiresAt: string | null;
 };
 
 type RawClaimRepo = { owner: string; name: string };
@@ -133,6 +164,8 @@ export async function getTeamClaims(
   supabase: SupabaseClient,
   teamId: string,
 ): Promise<TeamClaim[]> {
+  await releaseExpiredClaims(supabase);
+
   const { data, error } = await supabase
     .from("issue_claims")
     .select(
@@ -173,6 +206,7 @@ export async function getTeamClaims(
       solved: issue?.solved ?? false,
       repoFullName: repo ? `${repo.owner}/${repo.name}` : "unknown",
       claimedAt: raw.created_at,
+      expiresAt: issue?.solved ? null : claimExpiresAt(raw.created_at),
     };
   });
 }

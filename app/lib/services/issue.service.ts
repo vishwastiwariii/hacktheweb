@@ -1,5 +1,6 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import type { Difficulty } from "@/app/lib/github/labels";
+import { claimExpiresAt, releaseExpiredClaims } from "./claim.service";
 
 // Issues are imported from GitHub. GitHub owns title / description / labels /
 // points / difficulty; the platform owns `available` (and claims downstream).
@@ -37,6 +38,8 @@ export type IssueRecord = IssueRow & {
     // Which team holds the claim, if any — lets a viewer tell "my team claimed
     // this" from "someone else did".
     claimedByTeamId: string | null;
+    // When an unsolved claim lapses (see release_expired_claims()).
+    claimExpiresAt: string | null;
 };
 
 export type IssuePage = {
@@ -54,7 +57,7 @@ const DEFAULT_PAGE_SIZE = 20;
 
 type EmbeddedRepo = { id: string; event_id: string; owner: string; name: string };
 
-type EmbeddedClaim = { id: string; team_id: string | null };
+type EmbeddedClaim = { id: string; team_id: string | null; created_at: string | null };
 
 function shape(raw: unknown): IssueRecord {
     const { issue_claims, repositories, ...issue } = raw as IssueRow & {
@@ -73,6 +76,8 @@ function shape(raw: unknown): IssueRecord {
         repo_full_name: repo ? `${repo.owner}/${repo.name}` : "unknown",
         claimed: claim != null,
         claimedByTeamId: claim?.team_id ?? null,
+        claimExpiresAt:
+            claim && !issue.solved ? claimExpiresAt(claim.created_at) : null,
     };
 }
 
@@ -94,10 +99,12 @@ export async function getIssuesPage(
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
 
+    await releaseExpiredClaims(supabase);
+
     let query = supabase
         .from("hackathon_issues")
         .select(
-            `${ISSUE_COLUMNS}, repositories!inner ( id, event_id, owner, name ), issue_claims ( id, team_id )`,
+            `${ISSUE_COLUMNS}, repositories!inner ( id, event_id, owner, name ), issue_claims ( id, team_id, created_at )`,
             { count: "exact" }
         )
         .eq("repositories.event_id", opts.eventId);
@@ -143,6 +150,8 @@ export async function getClaimableIssueCounts(
     repositoryId?: string
 ): Promise<{ open: number; claimed: number }> {
     try {
+        await releaseExpiredClaims(supabase);
+
         let openQuery = supabase
             .from("hackathon_issues")
             .select("id, repositories!inner ( event_id )", {
@@ -182,10 +191,12 @@ export async function getIssue(
     supabase: SupabaseClient,
     issueId: string
 ): Promise<IssueRecord | null> {
+    await releaseExpiredClaims(supabase);
+
     const { data, error } = await supabase
         .from("hackathon_issues")
         .select(
-            `${ISSUE_COLUMNS}, repositories ( id, event_id, owner, name ), issue_claims ( id, team_id )`
+            `${ISSUE_COLUMNS}, repositories ( id, event_id, owner, name ), issue_claims ( id, team_id, created_at )`
         )
         .eq("id", issueId)
         .single();
@@ -211,7 +222,7 @@ export async function setIssueAvailability(
         .update({ available, updated_at: new Date().toISOString() })
         .eq("id", issueId)
         .select(
-            `${ISSUE_COLUMNS}, repositories ( id, event_id, owner, name ), issue_claims ( id, team_id )`
+            `${ISSUE_COLUMNS}, repositories ( id, event_id, owner, name ), issue_claims ( id, team_id, created_at )`
         )
         .single();
 

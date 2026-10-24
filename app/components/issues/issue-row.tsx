@@ -64,6 +64,7 @@ export default function IssueRow({
             }
             solved={issue.solved}
             canClaim={canClaim}
+            expiresAt={issue.claimExpiresAt}
           />
         </div>
       </div>
